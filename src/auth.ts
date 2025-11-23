@@ -24,7 +24,7 @@ export async function handleConfig(request: Request, env: Env): Promise<Response
     await saveAppConfig(env.DB, client_id, client_secret);
     return jsonResponse({ success: true });
   } catch (e) {
-    return errorResponse("Invalid JSON", 400);
+    return errorResponse("Failed to save: "+e, 400);
   }
 }
 
