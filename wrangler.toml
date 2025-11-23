@@ -12,6 +12,6 @@ directory = "frontend/dist"
 binding = "ASSETS"
 
 [[d1_databases]]
-binding = "DB_BINDING"
+binding = "DB"
 database_name = "strava-sync"
 database_id = "518ae258-2243-49ba-921c-fa249c9a3fdd"
