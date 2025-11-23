@@ -1,5 +1,5 @@
 {
-  "name": "js-fullstack-template",
+  "name": "strava-sync",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,10 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npm run generate:frontend",
+    "build": "npm run build:frontend",
+    "build:frontend": "vite build --config frontend/vite.config.ts",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "generate:frontend": "node ./scripts/embed-frontend.mjs",
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "vitest --config vitest.config.backend.ts",
     "test:frontend": "vitest --config vitest.config.frontend.ts",
@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251109.0",
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "@vitest/coverage-v8": "^4.0.8",
+    "better-sqlite3": "^12.4.6",
     "jsdom": "^27.1.0",
     "miniflare": "^4.20251105.0",
     "typescript": "^5.9.3",

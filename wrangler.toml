@@ -4,5 +4,14 @@ tsconfig = "./tsconfig.json"
 compatibility_date = "2025-02-14"
 
 [build]
-command = "npm run generate:frontend"
-watch_dir = ["frontend", "scripts", "src/frontend"]
+command = "npm run build:frontend"
+watch_dir = ["frontend"]
+
+[assets]
+directory = "frontend/dist"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "strava-sync-db"
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

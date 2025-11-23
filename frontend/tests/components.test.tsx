@@ -1,0 +1,111 @@
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import Dashboard from "../src/Dashboard";
+import Setup from "../src/Setup";
+import UserDetail from "../src/UserDetail";
+
+// Mock fetch
+const fetchMock = vi.fn();
+global.fetch = fetchMock;
+
+// Mock navigation
+const navigateMock = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+    useParams: () => ({ id: "123" }),
+  };
+});
+
+describe("Frontend Components", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    navigateMock.mockReset();
+    vi.clearAllMocks();
+  });
+
+  it("Dashboard loads users", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ strava_id: 1, firstname: "Test", lastname: "User", profile_pic: "", last_synced_at: null }],
+    });
+
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Test User")).toBeInTheDocument());
+  });
+
+  it("Setup form submits config", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true });
+
+    render(
+      <BrowserRouter>
+        <Setup />
+      </BrowserRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "123" } });
+    fireEvent.change(screen.getByLabelText("Client Secret"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByText("Save & Continue"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/config", expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ client_id: "123", client_secret: "abc" })
+      }));
+      expect(navigateMock).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("UserDetail syncs data", async () => {
+    // 1. Initial User Fetch
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ strava_id: 123, firstname: "Test", lastname: "User", profile_pic: "" }),
+    });
+    // 2. Initial Activities Fetch
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [],
+    });
+
+    render(
+      <BrowserRouter>
+        <UserDetail />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => expect(screen.getByText("Sync Now")).toBeInTheDocument());
+
+    // 3. Sync Call (Page 1)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ synced: 10, complete: true }),
+    });
+
+    // 4. Refresh User (after sync)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ strava_id: 123, firstname: "Test", lastname: "User", profile_pic: "", last_synced_at: 100 }),
+    });
+
+    // 5. Refresh Activities (after sync)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ id: 1, name: "New Run", type: "Run", distance: 1000, start_date: "2023-01-01" }],
+    });
+
+    fireEvent.click(screen.getByText("Sync Now"));
+
+    await waitFor(() => expect(screen.getByText(/Sync Complete!/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("New Run")).toBeInTheDocument());
+  });
+});

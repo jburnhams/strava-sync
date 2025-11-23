@@ -1,18 +1,19 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Dashboard from "./Dashboard";
+import Setup from "./Setup";
+import UserDetail from "./UserDetail";
+import "./index.css";
 
-import { App } from "./App";
-import "./styles.css";
-
-const container = document.getElementById("root");
-
-if (!container) {
-  throw new Error("Missing root element");
-}
-
-const root = createRoot(container);
-root.render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/setup" element={<Setup />} />
+        <Route path="/user/:id" element={<UserDetail />} />
+      </Routes>
+    </BrowserRouter>
   </React.StrictMode>
 );
