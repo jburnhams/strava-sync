@@ -1,16 +1,17 @@
-import { createCalculationResult } from "./calculator";
-import { renderFrontend } from "./frontend";
-import type { CalculationRequest, ErrorResponse } from "./types";
+import type { ErrorResponse } from "./types";
+import { handleConfig, handleLogin, handleCallback } from "./auth";
+import { handleGetUsers, handleGetUser, handleSync, handleGetActivities } from "./sync";
 
-export interface Env {}
+export interface Env {
+  ASSETS: {
+    fetch: (request: Request) => Promise<Response>;
+  };
+  DB: D1Database;
+}
 
 export interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException?: () => void;
-}
-
-function isValidOperation(op: string): op is "add" | "subtract" | "multiply" | "divide" {
-  return ["add", "subtract", "multiply", "divide"].includes(op);
 }
 
 function createErrorResponse(error: string, message: string, status: number): Response {
@@ -23,100 +24,62 @@ function createErrorResponse(error: string, message: string, status: number): Re
   });
 }
 
-async function handleCalculate(request: Request): Promise<Response> {
-  if (request.method !== "POST") {
-    return createErrorResponse(
-      "METHOD_NOT_ALLOWED",
-      "Only POST method is allowed",
-      405
-    );
-  }
+// Router
+async function handleApiRequest(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const method = request.method;
+  const path = url.pathname;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return createErrorResponse(
-      "INVALID_JSON",
-      "Request body must be valid JSON",
-      400
-    );
-  }
+  // Auth
+  if (path === "/api/config") return handleConfig(request, env);
+  if (path === "/api/auth/login") return handleLogin(request, env);
+  if (path === "/api/auth/callback") return handleCallback(request, env);
 
-  if (!body || typeof body !== "object") {
-    return createErrorResponse(
-      "INVALID_REQUEST",
-      "Request body must be an object",
-      400
-    );
-  }
+  // Users
+  if (path === "/api/users" && method === "GET") return handleGetUsers(request, env);
 
-  const payload = body as Record<string, unknown>;
+  // User Details & Sync (Regex might be cleaner but manual parsing is fine for now)
+  // /api/users/:id
+  const userMatch = path.match(/^\/api\/users\/(\d+)$/);
+  if (userMatch && method === "GET") return handleGetUser(request, env);
 
-  if (typeof payload.a !== "number" || typeof payload.b !== "number") {
-    return createErrorResponse(
-      "INVALID_OPERANDS",
-      "Both 'a' and 'b' must be numbers",
-      400
-    );
-  }
+  // /api/users/:id/sync
+  const syncMatch = path.match(/^\/api\/users\/(\d+)\/sync$/);
+  if (syncMatch && method === "POST") return handleSync(request, env);
 
-  if (typeof payload.operation !== "string" || !isValidOperation(payload.operation)) {
-    return createErrorResponse(
-      "INVALID_OPERATION",
-      "Operation must be one of: add, subtract, multiply, divide",
-      400
-    );
-  }
+  // /api/users/:id/activities
+  const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
+  if (actMatch && method === "GET") return handleGetActivities(request, env);
 
-  const calcRequest: CalculationRequest = {
-    a: payload.a,
-    b: payload.b,
-    operation: payload.operation,
-  };
-
-  try {
-    const result = createCalculationResult(
-      calcRequest.a,
-      calcRequest.b,
-      calcRequest.operation
-    );
-
-    return new Response(JSON.stringify(result), {
+  if (path === "/api/health") {
+    return new Response(JSON.stringify({ status: "ok" }), {
       status: 200,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-      },
+      headers: { "content-type": "application/json" }
     });
-  } catch (error) {
-    return createErrorResponse(
-      "CALCULATION_ERROR",
-      String(error),
-      400
-    );
   }
+
+  return createErrorResponse("NOT_FOUND", "API endpoint not found", 404);
 }
 
 export async function handleRequest(
   request: Request,
-  _env: Env,
+  env: Env,
   _ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
 
-  if (url.pathname === "/" || url.pathname === "/index.html") {
-    return renderFrontend();
+  // API Requests
+  if (url.pathname.startsWith("/api/")) {
+    return handleApiRequest(request, env);
   }
 
-  if (url.pathname === "/api/calculate") {
-    return handleCalculate(request);
+  // Static Assets & SPA Fallback
+  let response = await env.ASSETS.fetch(request);
+  if (response.status === 404 && !url.pathname.startsWith("/api/")) {
+    response = await env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
   }
 
-  if (url.pathname === "/health") {
-    return new Response("ok", { status: 200 });
-  }
-
-  return new Response("Not found", { status: 404 });
+  return response;
 }
 
 export default { fetch: handleRequest };
