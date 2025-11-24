@@ -80,7 +80,7 @@ export default function UserDetail() {
       <Link to="/" className="back-link">← Back to Dashboard</Link>
 
       <div className="profile-header">
-        <img src={user.profile_pic} alt="Profile" className="profile-pic-large" />
+        <img src={user.profile_pic || "https://via.placeholder.com/150"} alt="Profile" className="profile-pic-large" />
         <div>
            <h1>{user.firstname} {user.lastname}</h1>
            <p>ID: {user.strava_id}</p>

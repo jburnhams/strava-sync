@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { handleSync } from "../src/sync";
+import { handleSync, handleGetUsers, handleGetUser, handleGetActivities } from "../src/sync";
 import { setupTestDb } from "./setup-test-db";
 import { Env } from "../src/worker";
 
@@ -23,47 +23,138 @@ describe("Sync Logic", () => {
     `).run();
   });
 
-  it("should fetch activities from Strava and save them", async () => {
-    // Mock Strava Response
-    const stravaActivities = [
-      {
-        id: 1,
-        name: "Morning Run",
-        type: "Run",
-        start_date: "2023-01-01T00:00:00Z",
-        distance: 1000,
-        moving_time: 300,
-        elapsed_time: 300,
-        total_elevation_gain: 10
-      }
-    ];
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(stravaActivities), { status: 200 }));
+  describe("handleGetUsers", () => {
+    it("should return a list of users", async () => {
+      const req = new Request("http://localhost/api/users");
+      const res = await handleGetUsers(req, env);
+      const body = await res.json() as any[];
 
-    const req = new Request("http://localhost/api/users/100/sync?page=1", { method: "POST" });
-    const res = await handleSync(req, env);
-    const body = await res.json() as any;
-
-    expect(res.status).toBe(200);
-    expect(body.synced).toBe(1);
-    expect(body.complete).toBe(true); // < 30 items
-
-    // Verify DB
-    const act = await env.DB.prepare("SELECT * FROM activities WHERE id = 1").first<any>();
-    expect(act.name).toBe("Morning Run");
+      expect(res.status).toBe(200);
+      expect(body).toHaveLength(1);
+      expect(body[0].strava_id).toBe(100);
+    });
   });
 
-  it("should handle empty response (sync complete)", async () => {
-    fetchMock.mockResolvedValueOnce(new Response("[]", { status: 200 }));
+  describe("handleGetUser", () => {
+    it("should return a user by id", async () => {
+      const req = new Request("http://localhost/api/users/100");
+      const res = await handleGetUser(req, env);
+      const body = await res.json() as any;
 
-    const req = new Request("http://localhost/api/users/100/sync?page=2", { method: "POST" });
-    const res = await handleSync(req, env);
-    const body = await res.json() as any;
+      expect(res.status).toBe(200);
+      expect(body.strava_id).toBe(100);
+      expect(body.firstname).toBe("Test");
+      expect(body.access_token).toBeUndefined(); // Should be stripped
+      expect(body.refresh_token).toBeUndefined(); // Should be stripped
+    });
 
-    expect(body.synced).toBe(0);
-    expect(body.complete).toBe(true);
+    it("should return 404 for non-existent user", async () => {
+      const req = new Request("http://localhost/api/users/999");
+      const res = await handleGetUser(req, env);
+      expect(res.status).toBe(404);
+    });
 
-    // Verify user last_synced_at updated
-    const user = await env.DB.prepare("SELECT last_synced_at FROM users WHERE strava_id = 100").first<any>();
-    expect(user.last_synced_at).not.toBeNull();
+     it("should return error for invalid ID", async () => {
+      const req = new Request("http://localhost/api/users/");
+      const res = await handleGetUser(req, env);
+      expect(res.status).toBe(400); // Invalid ID because split pop empty
+    });
+  });
+
+  describe("handleSync", () => {
+    it("should fetch activities from Strava and save them", async () => {
+      // Mock Strava Response
+      const stravaActivities = [
+        {
+          id: 1,
+          name: "Morning Run",
+          type: "Run",
+          start_date: "2023-01-01T00:00:00Z",
+          distance: 1000,
+          moving_time: 300,
+          elapsed_time: 300,
+          total_elevation_gain: 10
+        }
+      ];
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(stravaActivities), { status: 200 }));
+
+      const req = new Request("http://localhost/api/users/100/sync?page=1", { method: "POST" });
+      const res = await handleSync(req, env);
+      const body = await res.json() as any;
+
+      expect(res.status).toBe(200);
+      expect(body.synced).toBe(1);
+      expect(body.complete).toBe(true); // < 30 items
+
+      // Verify DB
+      const act = await env.DB.prepare("SELECT * FROM activities WHERE id = 1").first<any>();
+      expect(act.name).toBe("Morning Run");
+    });
+
+    it("should handle empty response (sync complete)", async () => {
+      fetchMock.mockResolvedValueOnce(new Response("[]", { status: 200 }));
+
+      const req = new Request("http://localhost/api/users/100/sync?page=2", { method: "POST" });
+      const res = await handleSync(req, env);
+      const body = await res.json() as any;
+
+      expect(body.synced).toBe(0);
+      expect(body.complete).toBe(true);
+
+      // Verify user last_synced_at updated
+      const user = await env.DB.prepare("SELECT last_synced_at FROM users WHERE strava_id = 100").first<any>();
+      expect(user.last_synced_at).not.toBeNull();
+    });
+
+    it("should return 405 if method is not POST", async () => {
+      const req = new Request("http://localhost/api/users/100/sync", { method: "GET" });
+      const res = await handleSync(req, env);
+      expect(res.status).toBe(405);
+    });
+
+    it("should return 404 if user not found", async () => {
+      const req = new Request("http://localhost/api/users/999/sync", { method: "POST" });
+      const res = await handleSync(req, env);
+      expect(res.status).toBe(404);
+    });
+
+    it("should handle Strava 401 Unauthorized", async () => {
+       fetchMock.mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }));
+       const req = new Request("http://localhost/api/users/100/sync", { method: "POST" });
+       const res = await handleSync(req, env);
+       expect(res.status).toBe(401);
+    });
+
+    it("should handle Strava 429 Rate Limit", async () => {
+       fetchMock.mockResolvedValueOnce(new Response("Rate Limit", { status: 429 }));
+       const req = new Request("http://localhost/api/users/100/sync", { method: "POST" });
+       const res = await handleSync(req, env);
+       expect(res.status).toBe(429);
+    });
+
+    it("should handle generic Strava error", async () => {
+       fetchMock.mockResolvedValueOnce(new Response("Error", { status: 500 }));
+       const req = new Request("http://localhost/api/users/100/sync", { method: "POST" });
+       const res = await handleSync(req, env);
+       expect(res.status).toBe(500);
+    });
+  });
+
+  describe("handleGetActivities", () => {
+      it("should return activities for a user", async () => {
+          // Insert dummy activity
+          await env.DB.prepare(`
+              INSERT INTO activities (id, strava_id, name, type, start_date, distance, moving_time, elapsed_time, total_elevation_gain, data_json)
+              VALUES (1, 100, 'Test Run', 'Run', '2023-01-01', 5000, 1000, 1000, 50, '{}')
+          `).run();
+
+          const req = new Request("http://localhost/api/users/100/activities");
+          const res = await handleGetActivities(req, env);
+          const body = await res.json() as any[];
+
+          expect(res.status).toBe(200);
+          expect(body).toHaveLength(1);
+          expect(body[0].name).toBe("Test Run");
+      });
   });
 });

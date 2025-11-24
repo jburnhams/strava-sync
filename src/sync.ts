@@ -1,5 +1,5 @@
 import type { Env } from "./worker";
-import { getUser, getUsers, saveActivity, upsertUser } from "./db";
+import { getUser, getUsers, saveActivity, upsertUser, getAppConfig } from "./db";
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -50,9 +50,35 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
   const now = Math.floor(Date.now() / 1000);
 
   if (user.expires_at < now + 60) {
-     // Refresh token logic would go here
-     // For this iteration, we assume valid tokens or manual re-auth
-     // Ideally: call Strava refresh endpoint, update DB
+    const config = await getAppConfig(env.DB);
+    if (!config) return errorResponse("App not configured, cannot refresh token", 500);
+
+    const refreshRes = await fetch("https://www.strava.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: config.client_id,
+        client_secret: config.client_secret,
+        grant_type: "refresh_token",
+        refresh_token: user.refresh_token,
+      }),
+    });
+
+    if (!refreshRes.ok) {
+       return errorResponse("Failed to refresh token", 500);
+    }
+
+    const refreshData = await refreshRes.json() as any;
+    accessToken = refreshData.access_token;
+
+    // Update user with new tokens
+    const updatedUser = {
+      ...user,
+      access_token: refreshData.access_token,
+      refresh_token: refreshData.refresh_token,
+      expires_at: refreshData.expires_at
+    };
+    await upsertUser(env.DB, updatedUser);
   }
 
   // Parse page param
