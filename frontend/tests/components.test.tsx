@@ -1,9 +1,23 @@
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import Dashboard from "../src/Dashboard";
 import Setup from "../src/Setup";
 import UserDetail from "../src/UserDetail";
+
+// Mock Recharts globally for these component tests to avoid ResizeObserver errors
+vi.mock('recharts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('recharts')>();
+  return {
+    ...original,
+    ResponsiveContainer: ({ children }: any) => (
+      <div className="recharts-responsive-container">
+        {React.cloneElement(children, { width: 500, height: 300 })}
+      </div>
+    ),
+  };
+});
 
 // Mock fetch
 const fetchMock = vi.fn();

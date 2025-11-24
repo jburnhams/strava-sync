@@ -21,7 +21,8 @@
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.6"
+    "react-router-dom": "^7.9.6",
+    "recharts": "^3.5.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251109.0",
