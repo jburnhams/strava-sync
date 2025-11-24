@@ -1,6 +1,7 @@
 import type { ErrorResponse } from "./types";
 import { handleConfig, handleLogin, handleCallback } from "./auth";
-import { handleGetUsers, handleGetUser, handleSync, handleGetActivities } from "./sync";
+import { handleGetUsers, handleGetUser, handleSync, handleGetActivities, handleSyncStreams, handleGetActivityDetail, handleUpdateConfig } from "./sync";
+import { deleteActivity, deleteAllActivities } from "./db";
 
 export interface Env {
   ASSETS: {
@@ -50,6 +51,32 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   // /api/users/:id/activities
   const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
   if (actMatch && method === "GET") return handleGetActivities(request, env);
+
+  // /api/users/:id/activities (DELETE ALL)
+  if (actMatch && method === "DELETE") {
+      const id = parseInt(actMatch[1], 10);
+      await deleteAllActivities(env.DB, id);
+      return new Response(JSON.stringify({ status: "deleted" }), { status: 200 });
+  }
+
+  // /api/users/:id/streams (POST)
+  const streamMatch = path.match(/^\/api\/users\/(\d+)\/streams$/);
+  if (streamMatch && method === "POST") return handleSyncStreams(request, env);
+
+  // /api/users/:id/config (PATCH)
+  const configMatch = path.match(/^\/api\/users\/(\d+)\/config$/);
+  if (configMatch && method === "PATCH") return handleUpdateConfig(request, env);
+
+  // /api/activities/:id
+  const actDetailMatch = path.match(/^\/api\/activities\/(\d+)$/);
+  if (actDetailMatch) {
+      if (method === "GET") return handleGetActivityDetail(request, env);
+      if (method === "DELETE") {
+          const id = parseInt(actDetailMatch[1], 10);
+          await deleteActivity(env.DB, id);
+          return new Response(JSON.stringify({ status: "deleted" }), { status: 200 });
+      }
+  }
 
   if (path === "/api/health") {
     return new Response(JSON.stringify({ status: "ok" }), {
