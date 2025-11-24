@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import Setup from "./Setup";
 import UserDetail from "./UserDetail";
+import ActivityDetail from "./ActivityDetail";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<Dashboard />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/user/:id" element={<UserDetail />} />
+        <Route path="/activities/:id" element={<ActivityDetail />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

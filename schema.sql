@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS app_config;
+DROP TABLE IF EXISTS streams;
 
 CREATE TABLE app_config (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -18,7 +19,8 @@ CREATE TABLE users (
   refresh_token TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   created_at INTEGER DEFAULT (unixepoch()),
-  last_synced_at INTEGER
+  last_synced_at INTEGER,
+  sync_since TEXT DEFAULT '2018-01-01'
 );
 
 CREATE TABLE activities (
@@ -33,4 +35,13 @@ CREATE TABLE activities (
   total_elevation_gain REAL,
   data_json TEXT, -- Full JSON dump for caching
   FOREIGN KEY (strava_id) REFERENCES users(strava_id)
+);
+
+CREATE TABLE streams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  strava_id INTEGER NOT NULL, -- User's Strava ID (for ownership/cleanup)
+  activity_id INTEGER NOT NULL,
+  data_json TEXT, -- JSON of streams
+  FOREIGN KEY (strava_id) REFERENCES users(strava_id),
+  FOREIGN KEY (activity_id) REFERENCES activities(id)
 );
