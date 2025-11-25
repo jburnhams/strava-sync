@@ -16,7 +16,9 @@
     "test:frontend": "vitest --config vitest.config.frontend.ts",
     "test:coverage": "npm run test:coverage:backend && npm run test:coverage:frontend",
     "test:coverage:backend": "vitest run --config vitest.config.backend.ts --coverage",
-    "test:coverage:frontend": "vitest run --config vitest.config.frontend.ts --coverage"
+    "test:coverage:frontend": "vitest run --config vitest.config.frontend.ts --coverage",
+    "db:seed": "tsc scripts/seed.ts && mv scripts/seed.js scripts/seed.cjs && node scripts/seed.cjs",
+    "db:reset": "rm -rf .wrangler"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -35,6 +37,7 @@
     "better-sqlite3": "^12.4.6",
     "jsdom": "^27.1.0",
     "miniflare": "^4.20251105.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.8",
