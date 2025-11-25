@@ -78,7 +78,7 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
                 return (
                   <div
                     className="custom-tooltip"
-                    style={{ backgroundColor: 'white', padding: '5px', border: '1px solid #ccc' }}
+                    style={{ backgroundColor: 'white', padding: '5px', border: '1px solid #ccc', color: 'black' }}
                   >
                     <p>{`${data.name} - ${date} - ${data.value.toFixed(2)}${unit}`}</p>
                   </div>
