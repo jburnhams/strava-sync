@@ -14,6 +14,12 @@ const metricLabels: Record<Metric, string> = {
   'total_elevation_gain': 'Total Ascent (m)',
 };
 
+const metricUnits: Record<Metric, string> = {
+  'elapsed_time': 'h',
+  'distance': 'km',
+  'total_elevation_gain': 'm',
+};
+
 export default function ActivityScatterPlot({ activities }: ActivityScatterPlotProps) {
   const [selectedMetric, setSelectedMetric] = useState<Metric>('elapsed_time');
 
@@ -64,7 +70,11 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
           <ZAxis dataKey="name" name="Name" />
           <Tooltip
             cursor={{ strokeDasharray: '3 3' }}
-            formatter={(value: any, name: any, props: any) => [`${props.payload.name}: ${value.toFixed(2)}`, '']}
+            formatter={(value: number, name: string, { payload }: { payload: any }) => {
+              const date = new Date(payload.date).toISOString().split('T')[0];
+              const unit = metricUnits[selectedMetric];
+              return [`${payload.name} - ${date} - ${value.toFixed(2)}${unit}`, null];
+            }}
           />
           <Scatter name="Activities" data={data} fill="#8884d8" />
         </ScatterChart>
