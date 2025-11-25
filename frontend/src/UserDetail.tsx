@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import ActivityChart from "./ActivityChart";
+import ActivityScatterPlot from "./ActivityScatterPlot.tsx";
 
 export default function UserDetail() {
   const { id } = useParams();
@@ -94,6 +95,7 @@ export default function UserDetail() {
       {progress && <div className="sync-status">{progress}</div>}
 
       <ActivityChart activities={activities} />
+      <ActivityScatterPlot activities={activities} />
 
       <h2>Activities ({activities.length})</h2>
       <div className="activity-list">
