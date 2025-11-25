@@ -24,6 +24,7 @@ export async function handleGetUser(request: Request, env: Env): Promise<Respons
   const idStr = url.pathname.split("/").pop(); // /api/users/123 -> 123
   if (!idStr) return errorResponse("Invalid ID");
   const id = parseInt(idStr, 10);
+  if (isNaN(id)) return errorResponse("Invalid ID");
 
   const user = await getUser(env.DB, id);
   if (!user) return errorResponse("User not found", 404);
@@ -41,6 +42,7 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
   // Path is /api/users/:id/sync
   const parts = url.pathname.split("/");
   const id = parseInt(parts[3], 10);
+  if (isNaN(id)) return errorResponse("Invalid ID");
 
   const user = await getUser(env.DB, id);
   if (!user) return errorResponse("User not found", 404);
@@ -132,6 +134,7 @@ export async function handleGetActivities(request: Request, env: Env): Promise<R
   const url = new URL(request.url);
   const parts = url.pathname.split("/");
   const id = parseInt(parts[3], 10); // /api/users/123/activities
+  if (isNaN(id)) return errorResponse("Invalid ID");
 
   const result = await env.DB.prepare("SELECT * FROM activities WHERE strava_id = ? ORDER BY start_date DESC").bind(id).all();
   return jsonResponse(result.results);

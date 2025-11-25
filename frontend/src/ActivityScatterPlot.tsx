@@ -70,10 +70,21 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
           <ZAxis dataKey="name" name="Name" />
           <Tooltip
             cursor={{ strokeDasharray: '3 3' }}
-            formatter={(value: number, name: string, { payload }: { payload: any }) => {
-              const date = new Date(payload.date).toISOString().split('T')[0];
-              const unit = metricUnits[selectedMetric];
-              return [`${payload.name} - ${date} - ${value.toFixed(2)}${unit}`, null];
+            content={({ active, payload }) => {
+              if (active && payload && payload.length) {
+                const data = payload[0].payload;
+                const date = new Date(data.date).toISOString().split('T')[0];
+                const unit = metricUnits[selectedMetric];
+                return (
+                  <div
+                    className="custom-tooltip"
+                    style={{ backgroundColor: 'white', padding: '5px', border: '1px solid #ccc' }}
+                  >
+                    <p>{`${data.name} - ${date} - ${data.value.toFixed(2)}${unit}`}</p>
+                  </div>
+                );
+              }
+              return null;
             }}
           />
           <Scatter name="Activities" data={data} fill="#8884d8" />
