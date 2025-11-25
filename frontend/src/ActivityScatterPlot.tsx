@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ZAxis } from 'recharts';
 import { Activity } from './utils';
+import Modal from './Modal';
 
 interface ActivityScatterPlotProps {
   activities: Activity[];
@@ -22,6 +23,7 @@ const metricUnits: Record<Metric, string> = {
 
 export default function ActivityScatterPlot({ activities }: ActivityScatterPlotProps) {
   const [selectedMetric, setSelectedMetric] = useState<Metric>('elapsed_time');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const data = activities.map(act => {
     let value;
@@ -48,15 +50,14 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
     return <div className="chart-placeholder">No activity data to plot</div>;
   }
 
-  return (
-    <div className="chart-container" style={{ height: 300, width: '100%', marginTop: '20px' }}>
-      <h3>Activity Plot</h3>
+  const ChartWithControls = ({ height }: { height: number | string }) => (
+    <div style={{ height, width: '100%' }}>
       <select onChange={(e) => setSelectedMetric(e.target.value as Metric)} value={selectedMetric}>
         <option value="elapsed_time">Elapsed Time</option>
         <option value="distance">Distance</option>
         <option value="total_elevation_gain">Total Ascent</option>
       </select>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="90%">
         <ScatterChart>
           <CartesianGrid />
           <XAxis
@@ -91,5 +92,20 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
         </ScatterChart>
       </ResponsiveContainer>
     </div>
+  );
+
+  return (
+    <>
+      <div className="chart-container" style={{ height: 300, width: '100%', marginTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Activity Plot</h3>
+          <button onClick={() => setIsModalOpen(true)}>Maximize</button>
+        </div>
+        <ChartWithControls height="100%" />
+      </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <ChartWithControls height="90vh" />
+      </Modal>
+    </>
   );
 }
