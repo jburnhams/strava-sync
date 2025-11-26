@@ -1,4 +1,5 @@
 import type { Env } from "./worker";
+import type { Activity } from "./types";
 import { getUser, getUsers, saveActivity, upsertUser, getAppConfig } from "./db";
 
 function jsonResponse(data: any, status = 200) {
@@ -140,6 +141,19 @@ export async function handleGetActivities(request: Request, env: Env): Promise<R
   const id = parseInt(parts[3], 10); // /api/users/123/activities
   if (isNaN(id)) return errorResponse("Invalid ID");
 
-  const result = await env.DB.prepare("SELECT * FROM activities WHERE strava_id = ? ORDER BY start_date DESC").bind(id).all();
-  return jsonResponse(result.results);
+  const { results } = await env.DB.prepare("SELECT * FROM activities WHERE strava_id = ? ORDER BY start_date DESC")
+    .bind(id)
+    .all<Activity>();
+
+  const activities = results.map((act) => {
+    let data;
+    try {
+      data = JSON.parse(act.data_json);
+    } catch (e) {
+      data = null; // Set to null if parsing fails
+    }
+    return { ...act, data_json: data };
+  });
+
+  return jsonResponse(activities);
 }
