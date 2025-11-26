@@ -19,3 +19,16 @@ export interface ErrorResponse {
   error: string;
   message: string;
 }
+
+export interface Activity {
+  id: number;
+  strava_id: number;
+  name: string;
+  type: string;
+  start_date: string;
+  distance: number;
+  moving_time: number;
+  elapsed_time: number;
+  total_elevation_gain: number;
+  data_json: any;
+}

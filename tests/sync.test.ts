@@ -169,5 +169,36 @@ describe("Sync Logic", () => {
           expect(body).toHaveLength(1);
           expect(body[0].name).toBe("Test Run");
       });
+
+      it("should return activities with data_json as an object", async () => {
+        const jsonData = { detail: "some data" };
+        await env.DB.prepare(`
+          INSERT INTO activities (id, strava_id, name, data_json)
+          VALUES (1, 100, 'Test Run', ?)
+        `).bind(JSON.stringify(jsonData)).run();
+
+        const req = new Request("http://localhost/api/users/100/activities");
+        const res = await handleGetActivities(req, env);
+        const body = await res.json() as any[];
+
+        expect(res.status).toBe(200);
+        expect(body).toHaveLength(1);
+        expect(typeof body[0].data_json).toBe("object");
+        expect(body[0].data_json).toEqual(jsonData);
+      });
+
+      it("should handle malformed json and return null", async () => {
+        await env.DB.prepare(`
+          INSERT INTO activities (id, strava_id, name, data_json)
+          VALUES (1, 100, 'Test Run', ?)
+        `).bind("not-json").run();
+
+        const req = new Request("http://localhost/api/users/100/activities");
+        const res = await handleGetActivities(req, env);
+        const body = await res.json() as any[];
+
+        expect(res.status).toBe(200);
+        expect(body[0].data_json).toBeNull();
+      });
   });
 });
