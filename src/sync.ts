@@ -44,6 +44,10 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
   const id = parseInt(parts[3], 10);
   if (isNaN(id)) return errorResponse("Invalid ID");
 
+  if (id !== 7828229) {
+    return errorResponse("Sync is restricted to a specific user", 403);
+  }
+
   const user = await getUser(env.DB, id);
   if (!user) return errorResponse("User not found", 404);
 
