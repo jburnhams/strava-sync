@@ -2,13 +2,16 @@ import React, { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import ActivityChart from "./ActivityChart";
 import ActivityScatterPlot from "./ActivityScatterPlot.tsx";
+import ActivityDetailModal from "./ActivityDetailModal";
+import { Activity } from "./utils";
 
 export default function UserDetail() {
   const { id } = useParams();
   const [user, setUser] = useState<any>(null);
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [progress, setProgress] = useState("");
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const abortController = useRef<AbortController | null>(null);
 
   const fetchUser = async () => {
@@ -95,12 +98,12 @@ export default function UserDetail() {
       {progress && <div className="sync-status">{progress}</div>}
 
       <ActivityChart activities={activities} />
-      <ActivityScatterPlot activities={activities} />
+      <ActivityScatterPlot activities={activities} onActivityClick={setSelectedActivity} />
 
       <h2>Activities ({activities.length})</h2>
       <div className="activity-list">
         {activities.map(act => (
-          <div key={act.id} className="activity-item">
+          <div key={act.id} className="activity-item" onClick={() => setSelectedActivity(act)}>
              <strong>{act.name}</strong>
              <span>{act.type}</span>
              <span>{(act.distance / 1000).toFixed(2)} km</span>
@@ -108,6 +111,12 @@ export default function UserDetail() {
           </div>
         ))}
       </div>
+
+      <ActivityDetailModal
+        isOpen={!!selectedActivity}
+        onClose={() => setSelectedActivity(null)}
+        activity={selectedActivity}
+      />
     </div>
   );
 }

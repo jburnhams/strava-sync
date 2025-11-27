@@ -129,7 +129,13 @@ button:focus-visible {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
   align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
+.activity-item:hover {
+  background: #444;
+}
+
 .sync-status {
   padding: 1rem;
   background: #2a2a2a;
@@ -156,6 +162,8 @@ button:focus-visible {
   padding: 2rem;
   border-radius: 8px;
   position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .modal-close-button {
@@ -171,4 +179,68 @@ button:focus-visible {
 
 .maximize-chart-modal {
   width: 90vw;
+}
+
+/* Activity Detail Modal Styles */
+.activity-detail-modal {
+  width: 600px;
+  max-width: 95vw;
+}
+
+.activity-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+  color: #fff;
+}
+
+.activity-details-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal-section {
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.modal-section:nth-child(odd) {
+  background-color: #2a2a2a;
+}
+
+.modal-section:nth-child(even) {
+  background-color: #3a3a3a;
+}
+
+.modal-section-title {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  color: #fc4c02;
+  border-bottom: 1px solid #555;
+  padding-bottom: 0.5rem;
+}
+
+.modal-section-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.modal-detail-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.5rem;
+}
+
+.modal-detail-label {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.modal-detail-value {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #fff;
 }
