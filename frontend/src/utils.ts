@@ -8,7 +8,7 @@ export interface Activity {
   moving_time: number;
   elapsed_time: number;
   total_elevation_gain: number;
-  data_json?: string;
+  data_json?: any;
 }
 
 export interface MonthlyStats {
@@ -46,4 +46,34 @@ export function aggregateActivitiesByMonth(activities: Activity[]): MonthlyStats
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
   return result;
+}
+
+export function formatDuration(seconds: number): string {
+  if (!seconds) return "00:00:00";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+export function formatDistance(meters: number): string {
+  if (meters === null || meters === undefined) return "";
+  return (meters / 1000).toFixed(2) + " km";
+}
+
+export function formatSpeed(mps: number): string {
+  if (mps === null || mps === undefined) return "";
+  return (mps * 3.6).toFixed(1) + " km/h";
+}
+
+export function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }

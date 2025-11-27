@@ -5,6 +5,7 @@ import Modal from './Modal';
 
 interface ActivityScatterPlotProps {
   activities: Activity[];
+  onActivityClick?: (activity: Activity) => void;
 }
 
 type Metric = 'elapsed_time' | 'distance' | 'total_elevation_gain';
@@ -21,7 +22,7 @@ const metricUnits: Record<Metric, string> = {
   'total_elevation_gain': 'm',
 };
 
-export default function ActivityScatterPlot({ activities }: ActivityScatterPlotProps) {
+export default function ActivityScatterPlot({ activities, onActivityClick }: ActivityScatterPlotProps) {
   const [selectedMetric, setSelectedMetric] = useState<Metric>('elapsed_time');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -43,6 +44,7 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
       date: new Date(act.start_date).getTime(),
       value: value,
       name: act.name,
+      activity: act
     };
   });
 
@@ -88,7 +90,17 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
               return null;
             }}
           />
-          <Scatter name="Activities" data={data} fill="#8884d8" />
+          <Scatter
+            name="Activities"
+            data={data}
+            fill="#8884d8"
+            onClick={(data) => {
+              if (onActivityClick && data.payload && data.payload.activity) {
+                onActivityClick(data.payload.activity);
+              }
+            }}
+            cursor="pointer"
+          />
         </ScatterChart>
       </ResponsiveContainer>
     </div>
