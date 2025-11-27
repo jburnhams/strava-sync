@@ -103,7 +103,7 @@ export default function ActivityScatterPlot({ activities }: ActivityScatterPlotP
         </div>
         <ChartWithControls height="100%" />
       </div>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} className="maximize-chart-modal">
         <ChartWithControls height="90vh" />
       </Modal>
     </>
