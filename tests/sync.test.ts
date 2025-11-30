@@ -69,7 +69,7 @@ describe("Sync Logic", () => {
   });
 
   describe("handleSync", () => {
-    it("should fetch activities from Strava and save them", async () => {
+    it("should fetch activities from Strava and save them, returning purge success", async () => {
       // Mock Strava Response and Cloudflare Response
       const stravaActivities = [
         {
@@ -103,10 +103,35 @@ describe("Sync Logic", () => {
       expect(res.status).toBe(200);
       expect(body.synced).toBe(1);
       expect(body.complete).toBe(true); // < 30 items
+      expect(body.purge_result).toEqual({ success: true });
 
       // Verify DB
       const act = await env.DB.prepare("SELECT * FROM activities WHERE id = 1").first<any>();
       expect(act.name).toBe("Morning Run");
+    });
+
+    it("should return purge failure details but succeed sync", async () => {
+        const stravaActivities = [{ id: 1, name: "Run 1", start_date: "2023-01-01", type: "Run" }];
+
+        fetchMock.mockImplementation(async (url: string | Request) => {
+            const urlStr = url.toString();
+            if (urlStr.includes("strava.com")) {
+                 return new Response(JSON.stringify(stravaActivities), { status: 200 });
+            }
+            if (urlStr.includes("api.cloudflare.com")) {
+                 return new Response(JSON.stringify({ success: false, errors: ["Invalid token"] }), { status: 400 });
+            }
+            return new Response("Not Found", { status: 404 });
+        });
+
+        const req = new Request("http://localhost/api/users/7828229/sync?page=1", { method: "POST" });
+        const res = await handleSync(req, env, ctx);
+        const body = await res.json() as any;
+
+        expect(res.status).toBe(200);
+        expect(body.synced).toBe(1);
+        expect(body.purge_result.success).toBe(false);
+        expect(body.purge_result.error).toBeDefined();
     });
 
     it("should allow sync for the allowed user", async () => {
