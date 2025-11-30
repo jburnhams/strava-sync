@@ -1,6 +1,7 @@
 import type { ErrorResponse } from "./types";
 import { handleConfig, handleLogin, handleCallback } from "./auth";
 import { handleGetUsers, handleGetUser, handleSync, handleGetActivities } from "./sync";
+import { handleOptions, wrapCors } from "./cors";
 
 export interface Env {
   ASSETS: {
@@ -31,6 +32,10 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
   const url = new URL(request.url);
   const method = request.method;
   const path = url.pathname;
+
+  if (method === "OPTIONS") {
+    return handleOptions(request);
+  }
 
   // Auth
   if (path === "/api/config") return handleConfig(request, env);
@@ -72,7 +77,8 @@ export async function handleRequest(
 
   // API Requests
   if (url.pathname.startsWith("/api/")) {
-    return handleApiRequest(request, env, ctx);
+    const response = await handleApiRequest(request, env, ctx);
+    return wrapCors(response, request);
   }
 
   // Static Assets & SPA Fallback
