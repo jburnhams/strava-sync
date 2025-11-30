@@ -1,4 +1,4 @@
-import type { Env } from "./worker";
+import type { Env, ExecutionContext } from "./worker";
 import type { Activity } from "./types";
 import { getUser, getUsers, saveActivity, upsertUser, getAppConfig } from "./db";
 
@@ -35,8 +35,41 @@ export async function handleGetUser(request: Request, env: Env): Promise<Respons
   return jsonResponse(safeUser);
 }
 
+async function purgeCache(env: Env, url: string): Promise<{ success: boolean; error?: string }> {
+  if (!env.CLOUDFLARE_ZONE_ID || !env.CLOUDFLARE_API_TOKEN) {
+    const error = "Missing Cloudflare Zone ID or API Token, skipping cache purge";
+    console.warn(error);
+    return { success: false, error };
+  }
+
+  try {
+    const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${env.CLOUDFLARE_ZONE_ID}/purge_cache`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${env.CLOUDFLARE_API_TOKEN}`
+      },
+      body: JSON.stringify({
+        files: [url]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Failed to purge cache", errorText);
+      return { success: false, error: `Cloudflare API error: ${response.status} ${errorText}` };
+    } else {
+      console.log(`Successfully purged cache for ${url}`);
+      return { success: true };
+    }
+  } catch (e: any) {
+    console.error("Error purging cache", e);
+    return { success: false, error: e.message || "Unknown error during cache purge" };
+  }
+}
+
 // POST /api/users/:id/sync
-export async function handleSync(request: Request, env: Env): Promise<Response> {
+export async function handleSync(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method !== "POST") return errorResponse("Method not allowed", 405);
 
   const url = new URL(request.url);
@@ -131,7 +164,21 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
     });
   }
 
-  return jsonResponse({ synced: activities.length, complete: activities.length < perPage, next_page: page + 1 });
+  // Invalidate Cache if updates occurred
+  // The URL to invalidate: https://stravasync.jonathanburnhams.com/api/users/:id/activities
+  // We use the ID from the request URL/path which is the Strava ID.
+  let purgeResult;
+  if (activities.length > 0) {
+    const cacheUrl = `https://stravasync.jonathanburnhams.com/api/users/${id}/activities`;
+    purgeResult = await purgeCache(env, cacheUrl);
+  }
+
+  return jsonResponse({
+    synced: activities.length,
+    complete: activities.length < perPage,
+    next_page: page + 1,
+    purge_result: purgeResult
+  });
 }
 
 // GET /api/users/:id/activities
