@@ -1,18 +1,25 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { handleSync, handleGetUsers, handleGetUser, handleGetActivities } from "../src/sync";
 import { setupTestDb } from "./setup-test-db";
-import { Env } from "../src/worker";
+import { Env, ExecutionContext } from "../src/worker";
 
 const fetchMock = vi.fn();
 global.fetch = fetchMock;
 
 describe("Sync Logic", () => {
   let env: Env;
+  let ctx: ExecutionContext;
 
   beforeEach(async () => {
     env = {
       DB: setupTestDb(),
       ASSETS: { fetch: vi.fn() },
+      CLOUDFLARE_ZONE_ID: "mock-zone",
+      CLOUDFLARE_API_TOKEN: "mock-token",
+    };
+    ctx = {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
     };
     fetchMock.mockReset();
 
@@ -63,7 +70,7 @@ describe("Sync Logic", () => {
 
   describe("handleSync", () => {
     it("should fetch activities from Strava and save them", async () => {
-      // Mock Strava Response
+      // Mock Strava Response and Cloudflare Response
       const stravaActivities = [
         {
           id: 1,
@@ -76,10 +83,21 @@ describe("Sync Logic", () => {
           total_elevation_gain: 10
         }
       ];
-      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(stravaActivities), { status: 200 }));
+
+      fetchMock.mockImplementation(async (url: string | Request) => {
+        const urlStr = url.toString();
+        if (urlStr.includes("strava.com")) {
+             return new Response(JSON.stringify(stravaActivities), { status: 200 });
+        }
+        if (urlStr.includes("api.cloudflare.com")) {
+             return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+        return new Response("Not Found", { status: 404 });
+      });
+
 
       const req = new Request("http://localhost/api/users/7828229/sync?page=1", { method: "POST" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       const body = await res.json() as any;
 
       expect(res.status).toBe(200);
@@ -94,13 +112,13 @@ describe("Sync Logic", () => {
     it("should allow sync for the allowed user", async () => {
       fetchMock.mockResolvedValueOnce(new Response("[]", { status: 200 }));
       const req = new Request("http://localhost/api/users/7828229/sync", { method: "POST" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       expect(res.status).toBe(200);
     });
 
     it("should block sync for other users", async () => {
       const req = new Request("http://localhost/api/users/100/sync", { method: "POST" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       expect(res.status).toBe(403);
     });
 
@@ -108,7 +126,7 @@ describe("Sync Logic", () => {
       fetchMock.mockResolvedValueOnce(new Response("[]", { status: 200 }));
 
       const req = new Request("http://localhost/api/users/7828229/sync?page=2", { method: "POST" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       const body = await res.json() as any;
 
       expect(body.synced).toBe(0);
@@ -121,34 +139,34 @@ describe("Sync Logic", () => {
 
     it("should return 405 if method is not POST", async () => {
       const req = new Request("http://localhost/api/users/7828229/sync", { method: "GET" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       expect(res.status).toBe(405);
     });
 
     it("should return 403 if user not found, due to restriction", async () => {
       const req = new Request("http://localhost/api/users/999/sync", { method: "POST" });
-      const res = await handleSync(req, env);
+      const res = await handleSync(req, env, ctx);
       expect(res.status).toBe(403);
     });
 
     it("should handle Strava 401 Unauthorized", async () => {
        fetchMock.mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }));
        const req = new Request("http://localhost/api/users/7828229/sync", { method: "POST" });
-       const res = await handleSync(req, env);
+       const res = await handleSync(req, env, ctx);
        expect(res.status).toBe(401);
     });
 
     it("should handle Strava 429 Rate Limit", async () => {
        fetchMock.mockResolvedValueOnce(new Response("Rate Limit", { status: 429 }));
        const req = new Request("http://localhost/api/users/7828229/sync", { method: "POST" });
-       const res = await handleSync(req, env);
+       const res = await handleSync(req, env, ctx);
        expect(res.status).toBe(429);
     });
 
     it("should handle generic Strava error", async () => {
        fetchMock.mockResolvedValueOnce(new Response("Error", { status: 500 }));
        const req = new Request("http://localhost/api/users/7828229/sync", { method: "POST" });
-       const res = await handleSync(req, env);
+       const res = await handleSync(req, env, ctx);
        expect(res.status).toBe(500);
     });
   });

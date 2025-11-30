@@ -7,6 +7,8 @@ export interface Env {
     fetch: (request: Request) => Promise<Response>;
   };
   DB: D1Database;
+  CLOUDFLARE_ZONE_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
 }
 
 export interface ExecutionContext {
@@ -25,7 +27,7 @@ function createErrorResponse(error: string, message: string, status: number): Re
 }
 
 // Router
-async function handleApiRequest(request: Request, env: Env): Promise<Response> {
+async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const method = request.method;
   const path = url.pathname;
@@ -45,7 +47,7 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   // /api/users/:id/sync
   const syncMatch = path.match(/^\/api\/users\/(\d+)\/sync$/);
-  if (syncMatch && method === "POST") return handleSync(request, env);
+  if (syncMatch && method === "POST") return handleSync(request, env, ctx);
 
   // /api/users/:id/activities
   const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
@@ -64,13 +66,13 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 export async function handleRequest(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext
+  ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
 
   // API Requests
   if (url.pathname.startsWith("/api/")) {
-    return handleApiRequest(request, env);
+    return handleApiRequest(request, env, ctx);
   }
 
   // Static Assets & SPA Fallback
