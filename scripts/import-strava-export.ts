@@ -173,7 +173,8 @@ function sqlValue(v: unknown): string {
 
 export function toSql(activities: ExportActivity[], athleteId = ATHLETE_ID): string {
   const lines = [
-    `INSERT INTO users (strava_id) VALUES (${athleteId}) ON CONFLICT(strava_id) DO NOTHING;`,
+    // OR IGNORE, not ON CONFLICT: before migrations/0001 the users table still has NOT NULL token columns.
+    `INSERT OR IGNORE INTO users (strava_id) VALUES (${athleteId});`,
   ];
   for (const a of activities) {
     const values = [
