@@ -23,6 +23,16 @@ function intParam(value: string | null, name: string, min: number, max: number):
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// sport=run or a comma-separated list (sport=run,trail_run,ultra_run), so one group can be one filter
+function sportFilter(v: string | null): { sql: string; params: string[] } | Response | null {
+  if (!v) return null;
+  const sports = v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!sports.length || sports.length > 20 || sports.some((s) => !/^[a-z_]+$/.test(s))) {
+    return json({ error: "sport must be a sport or a comma-separated list of them" }, 400);
+  }
+  return { sql: `sport IN (${sports.map(() => "?").join(", ")})`, params: sports };
+}
+
 // GET /api/training/activities?sport=&race=1&from=YYYY-MM-DD&to=YYYY-MM-DD&limit=50&offset=0
 // With limit (1 to 200) the result is one page, newest first, and the X-Total-Count
 // header holds how many sessions match; without it everything is returned.
@@ -34,8 +44,9 @@ export async function handleTrainingActivities(request: Request, env: Env): Prom
   const q = new URL(request.url).searchParams;
   const where: string[] = [];
   const params: unknown[] = [];
-  const sport = q.get("sport");
-  if (sport) { where.push("sport = ?"); params.push(sport); }
+  const sport = sportFilter(q.get("sport"));
+  if (sport instanceof Response) return sport;
+  if (sport) { where.push(sport.sql); params.push(...sport.params); }
   const race = q.get("race");
   if (race === "1" || race === "0") { where.push("race = ?"); params.push(Number(race)); }
   for (const [key, op] of [["from", ">="], ["to", "<="]] as const) {
@@ -71,8 +82,9 @@ export async function handleTrainingSummary(request: Request, env: Env): Promise
   if (!key) return json({ error: "period must be week, month or year" }, 400);
   const where: string[] = [];
   const params: unknown[] = [];
-  const sport = q.get("sport");
-  if (sport) { where.push("sport = ?"); params.push(sport); }
+  const sport = sportFilter(q.get("sport"));
+  if (sport instanceof Response) return sport;
+  if (sport) { where.push(sport.sql); params.push(...sport.params); }
   const race = q.get("race");
   if (race === "1" || race === "0") { where.push("race = ?"); params.push(Number(race)); }
   for (const [name, op] of [["from", ">="], ["to", "<="]] as const) {
