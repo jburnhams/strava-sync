@@ -2,7 +2,7 @@
 // Download or delete your account) into SQL for D1. Strava's API needs a paid
 // subscription since 2026-06-30, so the export is how new activities get in.
 //
-//   bun scripts/import-strava-export.ts <export>/activities.csv > import.sql
+//   bun scripts/import-strava-export.ts <export>/activities.csv [<export dir>] > import.sql
 //   npx wrangler d1 execute strava-sync --remote --file import.sql
 //
 // Like the old API sync it takes every activity, keyed on the Strava activity id.
@@ -10,8 +10,16 @@
 // are merged over the stored API record (json_patch), so API-only fields such as
 // workout_type (the race tag) and map survive. workout_type also comes from the
 // export's Tag column, so new activities get the race tag too.
+//
+// Rows without a map (only those: Strava's own maps have privacy zones applied)
+// get one built from the export's activity file (FIT/GPX/TCX), marked
+// map.generated = true, sized like Strava's summary polylines. The same guarded
+// updates fill start_date_local (FIT only, from its UTC offset) and average_speed
+// when missing, since the website shows dates and pace from those.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { readTrack, summaryPolyline } from "./gps-track";
 
 export const ATHLETE_ID = 7828229;
 
@@ -87,6 +95,24 @@ export interface ExportActivity {
   elapsed_time: number;
   total_elevation_gain: number;
   data_json: Record<string, unknown>;
+  fill?: Record<string, unknown>; // set only where the stored record lacks the key (see toSql)
+}
+
+// Values derived from the activity file and the CSV that must never replace what the API stored.
+export function fillsFor(a: ExportActivity, exportDir?: string): Record<string, unknown> {
+  const fill: Record<string, unknown> = {};
+  const d = a.data_json as Record<string, any>;
+  if (a.distance && a.moving_time) fill.average_speed = Math.round((a.distance / a.moving_time) * 1000) / 1000;
+  const file = exportDir && d.export_filename ? join(exportDir, d.export_filename) : undefined;
+  if (file && existsSync(file)) {
+    const track = readTrack(file);
+    const poly = summaryPolyline(track.points);
+    if (poly) fill.map = { summary_polyline: poly, generated: true };
+    if (track.utcOffsetSeconds !== undefined) {
+      fill.start_date_local = new Date(Date.parse(a.start_date) + track.utcOffsetSeconds * 1000).toISOString().replace(/\.000Z$/, "Z");
+    }
+  }
+  return fill;
 }
 
 export function activitiesFromCsv(text: string): ExportActivity[] {
@@ -158,6 +184,13 @@ export function toSql(activities: ExportActivity[], athleteId = ATHLETE_ID): str
       `INSERT INTO activities (id, strava_id, name, type, start_date, distance, moving_time, elapsed_time, total_elevation_gain, data_json) VALUES (${values}) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, start_date = excluded.start_date, distance = excluded.distance, moving_time = excluded.moving_time, elapsed_time = excluded.elapsed_time, total_elevation_gain = excluded.total_elevation_gain, data_json = json_patch(coalesce(activities.data_json, '{}'), excluded.data_json);`
     );
   }
+  for (const a of activities) {
+    const f = a.fill ?? {};
+    if (f.map) lines.push(`UPDATE activities SET data_json = json_set(coalesce(data_json, '{}'), '$.map', json(${sqlValue(JSON.stringify(f.map))})) WHERE id = ${a.id} AND json_extract(data_json, '$.map.summary_polyline') IS NULL;`);
+    for (const k of ["start_date_local", "average_speed"]) {
+      if (f[k] !== undefined) lines.push(`UPDATE activities SET data_json = json_set(data_json, '$.${k}', ${sqlValue(f[k])}) WHERE id = ${a.id} AND json_extract(data_json, '$.${k}') IS NULL;`);
+    }
+  }
   lines.push(`UPDATE users SET last_synced_at = unixepoch() WHERE strava_id = ${athleteId};`);
   return lines.join("\n") + "\n";
 }
@@ -165,10 +198,13 @@ export function toSql(activities: ExportActivity[], athleteId = ATHLETE_ID): str
 if (import.meta.main) {
   const path = process.argv[2];
   if (!path) {
-    console.error("usage: bun scripts/import-strava-export.ts <export>/activities.csv > import.sql");
+    console.error("usage: bun scripts/import-strava-export.ts <export>/activities.csv [<export dir>] > import.sql");
     process.exit(1);
   }
+  const exportDir = process.argv[3] ?? dirname(path);
   const activities = activitiesFromCsv(readFileSync(path, "utf-8"));
+  for (const a of activities) a.fill = fillsFor(a, exportDir);
   process.stdout.write(toSql(activities));
-  console.error(`${activities.length} activities`);
+  const maps = activities.filter((a) => a.fill?.map).length;
+  console.error(`${activities.length} activities, ${maps} with a map from their activity file (applied only where none is stored)`);
 }
