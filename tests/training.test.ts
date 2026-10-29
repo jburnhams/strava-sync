@@ -13,11 +13,12 @@ describe("training API", () => {
       ('a', '2026-10-01', 'run', 10000, 3000, 3100, 50, 0, NULL),
       ('b', '2026-10-05', 'ride', 40000, 5000, 5200, 300, 0, NULL),
       ('c', '2026-09-28', 'run', 21000, 6000, 6100, 120, 1, 16186895116)`).run();
-    await env.DB.prepare(`INSERT INTO training_weekly (week, sport, count, distance, moving_time, elevation_gain) VALUES
-      ('2026-09-28', 'run', 2, 31000, 9000, 170),
-      ('2026-09-28', 'ride', 5, 60000, 9000, 200),
-      ('2026-10-05', 'ride', 3, 50000, 7000, 350),
-      ('2025-12-29', 'run', 1, 5000, 1500, 10)`).run();
+    await env.DB.prepare(`INSERT INTO training_weekly (week, sport, race, count, distance, moving_time, elevation_gain) VALUES
+      ('2026-09-28', 'run', 0, 1, 10000, 3000, 50),
+      ('2026-09-28', 'run', 1, 1, 21000, 6000, 120),
+      ('2026-09-28', 'ride', 0, 5, 60000, 9000, 200),
+      ('2026-10-05', 'ride', 0, 3, 50000, 7000, 350),
+      ('2025-12-29', 'run', 0, 1, 5000, 1500, 10)`).run();
   });
 
   async function get(path: string) {
@@ -50,6 +51,9 @@ describe("training API", () => {
 
     const year = await get("/api/training/summary?period=year&sport=run");
     expect(year.body.map((r: any) => [r.period, r.count])).toEqual([["2026", 2], ["2025", 1]]);
+
+    const training = await get("/api/training/summary?period=year&sport=run&race=0");
+    expect(training.body.map((r: any) => [r.period, r.count, r.distance])).toEqual([["2026", 1, 10000], ["2025", 1, 5000]]);
 
     expect((await get("/api/training/summary?period=day")).status).toBe(400);
   });

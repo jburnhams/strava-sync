@@ -41,19 +41,24 @@ export async function handleTrainingActivities(request: Request, env: Env): Prom
   return json(results);
 }
 
-// GET /api/training/summary?period=week|month|year&sport=
+// GET /api/training/summary?period=week|month|year&sport=&race=0|1 (omit race for both)
 // Built from weekly totals; month and year group weeks by the month/year their Monday falls in.
 export async function handleTrainingSummary(request: Request, env: Env): Promise<Response> {
   const q = new URL(request.url).searchParams;
   const period = q.get("period") ?? "week";
   const key = { week: "week", month: "substr(week, 1, 7)", year: "substr(week, 1, 4)" }[period];
   if (!key) return json({ error: "period must be week, month or year" }, 400);
+  const where: string[] = [];
+  const params: unknown[] = [];
   const sport = q.get("sport");
+  if (sport) { where.push("sport = ?"); params.push(sport); }
+  const race = q.get("race");
+  if (race === "1" || race === "0") { where.push("race = ?"); params.push(Number(race)); }
   const { results } = await env.DB.prepare(
     `SELECT ${key} AS period, sport, sum(count) AS count, sum(distance) AS distance,
             sum(moving_time) AS moving_time, sum(elevation_gain) AS elevation_gain
-     FROM training_weekly ${sport ? "WHERE sport = ?" : ""}
+     FROM training_weekly ${where.length ? "WHERE " + where.join(" AND ") : ""}
      GROUP BY period, sport ORDER BY period DESC, sport`
-  ).bind(...(sport ? [sport] : [])).all();
+  ).bind(...params).all();
   return json(results);
 }
