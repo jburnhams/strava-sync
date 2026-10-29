@@ -4,6 +4,7 @@ export function getCorsHeaders(request: Request): HeadersInit {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Expose-Headers": "X-Total-Count",
     "Access-Control-Max-Age": "86400",
   };
 }
