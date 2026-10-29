@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS training_activities (
   distance REAL, -- metres
   moving_time INTEGER, -- seconds
   elapsed_time INTEGER,
-  elevation_gain REAL -- metres
+  elevation_gain REAL, -- metres
+  race INTEGER NOT NULL DEFAULT 0 -- 1 when it falls within a race-tagged Strava activity (see garmin-publish)
 );
 CREATE INDEX IF NOT EXISTS training_activities_date ON training_activities(date);
 
