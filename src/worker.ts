@@ -34,7 +34,7 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
     return handleOptions(request);
   }
 
-  // Read-only API: the local sync job writes to D1 directly (see sync/README.md)
+  // Read-only API: data is loaded into D1 directly, never through the Worker
   if (method !== "GET" && method !== "HEAD") {
     return createErrorResponse("METHOD_NOT_ALLOWED", "This API is read-only", 405);
   }
