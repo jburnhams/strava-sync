@@ -2,6 +2,7 @@ import type { ErrorResponse } from "./types";
 import { handleGetUsers, handleGetUser, handleGetActivities } from "./sync";
 import { handleOptions, wrapCors } from "./cors";
 import { handleGetPhoto } from "./photos";
+import { handleTrainingActivities, handleTrainingSummary } from "./training";
 
 export interface Env {
   ASSETS: {
@@ -55,6 +56,10 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
   // /api/photos/:id
   const photoMatch = path.match(/^\/api\/photos\/(\d+_\d+)$/);
   if (photoMatch) return handleGetPhoto(request, env, photoMatch[1]);
+
+  // Training (anonymised Garmin data)
+  if (path === "/api/training/activities") return handleTrainingActivities(request, env);
+  if (path === "/api/training/summary") return handleTrainingSummary(request, env);
 
   if (path === "/api/health") {
     return new Response(JSON.stringify({ status: "ok" }), {

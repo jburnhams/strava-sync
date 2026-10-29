@@ -8,7 +8,7 @@ A Cloudflare Worker that serves race results (Strava activities) from a D1 datab
     -   **Dashboard**: View synced athletes.
     -   **User Detail**: View profile, last sync time, charts and activities.
 -   **Backend**: Cloudflare Worker with D1 Database (SQLite).
-    -   **API**: read-only `GET /api/users`, `/api/users/:id`, `/api/users/:id/activities`; any other method gets 405.
+    -   **API**: read-only `GET /api/users`, `/api/users/:id`, `/api/users/:id/activities`, `/api/photos/:id`, and anonymised training data at `/api/training/activities` and `/api/training/summary?period=week|month|year` (published from a private Garmin sync on another machine: day, sport, distance, durations and elevation only); any other method gets 405.
 
 ## Architecture
 
