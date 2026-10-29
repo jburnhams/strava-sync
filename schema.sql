@@ -55,16 +55,18 @@ CREATE TABLE training_activities (
   moving_time INTEGER, -- seconds
   elapsed_time INTEGER,
   elevation_gain REAL, -- metres
-  race INTEGER NOT NULL DEFAULT 0 -- 1 when it falls within a race-tagged Strava activity (see garmin-publish)
+  race INTEGER NOT NULL DEFAULT 0, -- 1 when it falls within a race-tagged Strava activity (see garmin-publish)
+  race_activity_id INTEGER -- that Strava activity's id (in activities), for race sessions
 );
 CREATE INDEX training_activities_date ON training_activities(date);
 
 CREATE TABLE training_weekly (
   week TEXT NOT NULL, -- Monday, YYYY-MM-DD
   sport TEXT NOT NULL,
+  race INTEGER NOT NULL DEFAULT 0, -- totals of race sessions (1) or training (0)
   count INTEGER NOT NULL,
   distance REAL,
   moving_time INTEGER,
   elevation_gain REAL,
-  PRIMARY KEY (week, sport)
+  PRIMARY KEY (week, sport, race)
 );
