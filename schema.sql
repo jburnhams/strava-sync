@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS photos;
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
 
@@ -24,4 +25,20 @@ CREATE TABLE activities (
   total_elevation_gain REAL,
   data_json TEXT, -- Full JSON dump for caching
   FOREIGN KEY (strava_id) REFERENCES users(strava_id)
+);
+
+-- Activity photos from the Strava export, resized and with all metadata (incl.
+-- GPS) stripped; base64 JPEG. Served by GET /api/photos/:id; activities list them
+-- in data_json.photos.
+CREATE TABLE photos (
+  id TEXT PRIMARY KEY, -- "<activity id>_<position>"
+  activity_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  caption TEXT,
+  width INTEGER NOT NULL, -- of the full size
+  height INTEGER NOT NULL,
+  thumb TEXT NOT NULL, -- ~400 px wide
+  full TEXT NOT NULL, -- ~1200 px on the long edge
+  source TEXT, -- file name in the export, to skip it on the next import
+  FOREIGN KEY (activity_id) REFERENCES activities(id)
 );

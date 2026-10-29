@@ -1,6 +1,7 @@
 import type { ErrorResponse } from "./types";
 import { handleGetUsers, handleGetUser, handleGetActivities } from "./sync";
 import { handleOptions, wrapCors } from "./cors";
+import { handleGetPhoto } from "./photos";
 
 export interface Env {
   ASSETS: {
@@ -50,6 +51,10 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
   // /api/users/:id/activities
   const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
   if (actMatch) return handleGetActivities(request, env);
+
+  // /api/photos/:id
+  const photoMatch = path.match(/^\/api\/photos\/(\d+_\d+)$/);
+  if (photoMatch) return handleGetPhoto(request, env, photoMatch[1]);
 
   if (path === "/api/health") {
     return new Response(JSON.stringify({ status: "ok" }), {
