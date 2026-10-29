@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS training_weekly;
+DROP TABLE IF EXISTS training_activities;
 DROP TABLE IF EXISTS photos;
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
@@ -41,4 +43,27 @@ CREATE TABLE photos (
   full TEXT NOT NULL, -- ~1200 px on the long edge
   source TEXT, -- file name in the export, to skip it on the next import
   FOREIGN KEY (activity_id) REFERENCES activities(id)
+);
+
+-- Public training data, published by garmin-publish on omarchy from the private
+-- Garmin sync with identifying details removed (see src/training.ts).
+CREATE TABLE training_activities (
+  id TEXT PRIMARY KEY, -- opaque (hash), not the Garmin activity id
+  date TEXT NOT NULL, -- local day, YYYY-MM-DD; no time of day
+  sport TEXT NOT NULL, -- run, trail_run, ride, swim, hike, walk, other...
+  distance REAL, -- metres
+  moving_time INTEGER, -- seconds
+  elapsed_time INTEGER,
+  elevation_gain REAL -- metres
+);
+CREATE INDEX training_activities_date ON training_activities(date);
+
+CREATE TABLE training_weekly (
+  week TEXT NOT NULL, -- Monday, YYYY-MM-DD
+  sport TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  distance REAL,
+  moving_time INTEGER,
+  elevation_gain REAL,
+  PRIMARY KEY (week, sport)
 );
