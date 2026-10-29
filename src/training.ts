@@ -17,7 +17,8 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 // GET /api/training/activities?sport=&race=1&from=YYYY-MM-DD&to=YYYY-MM-DD
 // race is 1 when the activity falls on the day(s) of a race tagged in Strava
 // (matched by sport, date span and distance > 20 km; one Strava race can cover
-// several Garmin activities).
+// several Garmin activities). race_activity_id is that Strava activity's id, as
+// listed by /api/users/:id/activities.
 export async function handleTrainingActivities(request: Request, env: Env): Promise<Response> {
   const q = new URL(request.url).searchParams;
   const where: string[] = [];
@@ -34,7 +35,7 @@ export async function handleTrainingActivities(request: Request, env: Env): Prom
     params.push(v);
   }
   const { results } = await env.DB.prepare(
-    `SELECT date, sport, distance, moving_time, elapsed_time, elevation_gain, race FROM training_activities
+    `SELECT date, sport, distance, moving_time, elapsed_time, elevation_gain, race, race_activity_id FROM training_activities
      ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY date DESC`
   ).bind(...params).all();
   return json(results);
