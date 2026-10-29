@@ -1,10 +1,10 @@
 # Strava Sync
 
-A Cloudflare Worker that serves cached Strava data from a D1 database through a read-only, CORS-enabled API and a small React dashboard. The data is written by a local sync job ([sync/](sync/README.md)) that holds the Strava credentials and runs on a timer, so no Strava secrets live in Cloudflare.
+A Cloudflare Worker that serves cached activity data from a D1 database through a read-only, CORS-enabled API and a small React dashboard. The data is written by a local sync job ([sync/](sync/README.md)) that pulls from the Garmin Connect Personal API on a timer and holds all credentials, so none live in Cloudflare. (It started as a Strava sync; Strava's API now needs a paid subscription, so older Strava-imported rows stay but new data comes from Garmin.)
 
 ## Features
 
--   **Sync job** (`sync/`): runs locally (bun), refreshes the Strava token, fetches new activities and writes them to D1 over the D1 HTTP API, then purges the Cloudflare cache.
+-   **Sync job** (`sync/`): runs locally (bun), fetches new activities from Garmin and writes them to D1 over the D1 HTTP API, then purges the Cloudflare cache.
 -   **Frontend**: A React Single Page Application (SPA) embedded directly in the Worker.
     -   **Dashboard**: View synced athletes.
     -   **User Detail**: View profile, last sync time, charts and activities.
@@ -70,4 +70,4 @@ A Cloudflare Worker that serves cached Strava data from a D1 database through a 
 ## Implementation Details
 
 -   **Asset Serving**: The frontend is built into `frontend/dist`. The Worker serves these static assets using Cloudflare's native `[assets]` binding. API requests (`/api/*`) are intercepted and handled by the Worker logic. SPA routing is supported by falling back to `index.html` for unknown routes.
--   **Security**: The Worker holds no credentials and accepts no writes. The Strava client secret, refresh token and the Cloudflare API token used for writes stay on the machine running the sync job.
+-   **Security**: The Worker holds no credentials and accepts no writes. The Garmin key and the Cloudflare API token used for writes stay on the machine running the sync job.

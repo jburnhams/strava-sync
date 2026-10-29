@@ -1,8 +1,8 @@
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
 
--- Written only by the local sync job (sync/strava-sync.ts) through the D1 HTTP
--- API. No Strava credentials live here: they stay on the machine running it.
+-- Written only by the local sync job (sync/sync.ts) through the D1 HTTP API.
+-- No credentials live here: they stay on the machine running it.
 CREATE TABLE users (
   strava_id INTEGER PRIMARY KEY,
   firstname TEXT,
@@ -22,6 +22,7 @@ CREATE TABLE activities (
   moving_time INTEGER,
   elapsed_time INTEGER,
   total_elevation_gain REAL,
-  data_json TEXT, -- Full JSON dump for caching
+  data_json TEXT, -- Strava-named detail fields; Garmin rows also hold the raw record under "garmin"
+  source TEXT DEFAULT 'strava', -- 'garmin' (current sync) or 'strava' (imported before 2026-10)
   FOREIGN KEY (strava_id) REFERENCES users(strava_id)
 );

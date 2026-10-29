@@ -1,21 +1,20 @@
-// Pure logic for the local sync job (sync/strava-sync.ts). No file or process
+// Pure logic for the local sync job (sync/garmin-sync.ts). No file or process
 // access here, so it can be unit tested; network calls take an injected fetch.
+//
+// Source: Garmin Connect Personal API (read-only, personal API key; see
+// https://developer.garmin.com/gc-developer-program/personal/personal-api).
+// Strava's API needs a paid subscription since 2026-06-30, so it is no longer used;
+// rows already imported from Strava stay, marked source = 'strava'.
 
 export interface Config {
-  client_id: string;
-  client_secret: string;
+  garmin_api_key: string;
   athlete_id: number;
+  include_types: string[] | null;
   cf_account_id: string;
   cf_d1_database_id: string;
   cf_zone_id: string;
   cf_api_token: string;
   public_url: string;
-}
-
-export interface TokenState {
-  refresh_token: string;
-  access_token?: string;
-  expires_at?: number;
 }
 
 export interface Statement {
@@ -25,110 +24,121 @@ export interface Statement {
 
 type Fetch = typeof fetch;
 
-const STRAVA = "https://www.strava.com";
+const GARMIN = "https://personal.connectapi.garmin.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
+
+// Garmin refuses page sizes above about 200.
+const PAGE_SIZE = 200;
 
 // D1 allows at most 100 bound parameters per query.
 const D1_MAX_PARAMS = 100;
 const ACTIVITY_COLUMNS = [
   "id", "strava_id", "name", "type", "start_date", "distance",
-  "moving_time", "elapsed_time", "total_elevation_gain", "data_json",
+  "moving_time", "elapsed_time", "total_elevation_gain", "data_json", "source",
 ] as const;
 
 // Re-fetch this far back from the newest stored activity, to pick up late
 // uploads and edits (renames, type changes) to recent activities.
 export const OVERLAP_SECONDS = 30 * 24 * 3600;
 
+// A Strava row is a copy of a Garmin activity when they start this close together.
+export const DUPLICATE_WINDOW_SECONDS = 10 * 60;
+
 export function validateConfig(raw: any): Config {
   const required = [
-    "client_id", "client_secret", "athlete_id", "cf_account_id",
-    "cf_d1_database_id", "cf_zone_id", "cf_api_token",
+    "garmin_api_key", "athlete_id", "cf_account_id", "cf_d1_database_id", "cf_zone_id", "cf_api_token",
   ];
   const missing = required.filter((k) => raw?.[k] === undefined || raw?.[k] === "");
   if (missing.length) throw new Error(`config is missing: ${missing.join(", ")}`);
   return {
     ...raw,
     athlete_id: Number(raw.athlete_id),
+    include_types: Array.isArray(raw.include_types) && raw.include_types.length ? raw.include_types : null,
     public_url: (raw.public_url || "https://stravasync.jonathanburnhams.com").replace(/\/$/, ""),
   };
 }
 
-// Returns a usable access token, refreshing it if it expires within a minute.
-// The caller must persist the returned state: Strava may rotate the refresh token.
-export async function ensureAccessToken(
-  config: Config, state: TokenState, now: number, fetchFn: Fetch = fetch
-): Promise<TokenState> {
-  if (state.access_token && state.expires_at && state.expires_at > now + 60) return state;
-
-  const res = await fetchFn(`${STRAVA}/oauth/token`, {
+// Trades the personal API key for a 24 h access token (plain text response).
+export async function getAccessToken(config: Config, fetchFn: Fetch = fetch): Promise<string> {
+  const res = await fetchFn(`${GARMIN}/personalapitoken-service/personal-api/personal-api-key/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: config.client_id,
-      client_secret: config.client_secret,
-      grant_type: "refresh_token",
-      refresh_token: state.refresh_token,
-    }),
+    headers: { Authorization: `ApiKey ${config.garmin_api_key}` },
   });
-  if (!res.ok) throw new Error(`Strava token refresh failed: ${res.status} ${await res.text()}`);
-  const data = await res.json() as any;
-  return { refresh_token: data.refresh_token, access_token: data.access_token, expires_at: data.expires_at };
-}
-
-// Exchanges an authorization code (from the `auth` command) for tokens.
-export async function exchangeCode(config: Config, code: string, fetchFn: Fetch = fetch): Promise<TokenState> {
-  const res = await fetchFn(`${STRAVA}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: config.client_id,
-      client_secret: config.client_secret,
-      code,
-      grant_type: "authorization_code",
-    }),
-  });
-  if (!res.ok) throw new Error(`Strava code exchange failed: ${res.status} ${await res.text()}`);
-  const data = await res.json() as any;
-  if (data.athlete?.id !== config.athlete_id) {
-    throw new Error(`authorized athlete ${data.athlete?.id} is not the configured athlete_id ${config.athlete_id}`);
+  const body = (await res.text()).trim();
+  if (!res.ok) throw new Error(`Garmin token exchange failed: ${res.status} ${body.slice(0, 200)}`);
+  // Accept a JSON body too, in case Garmin changes the format.
+  if (body.startsWith("{")) {
+    const json = JSON.parse(body);
+    return json.access_token ?? json.accessToken;
   }
-  return { refresh_token: data.refresh_token, access_token: data.access_token, expires_at: data.expires_at };
+  return body;
 }
 
-export function authorizeUrl(config: Config): string {
-  const params = new URLSearchParams({
-    client_id: config.client_id,
-    response_type: "code",
-    redirect_uri: "http://localhost/exchange_token",
-    approval_prompt: "force",
-    scope: "read,activity:read_all,profile:read_all",
-  });
-  return `${STRAVA}/oauth/authorize?${params}`;
-}
-
-async function stravaGet(path: string, token: string, fetchFn: Fetch): Promise<any> {
-  const res = await fetchFn(`${STRAVA}/api/v3${path}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Strava GET ${path} failed: ${res.status} ${await res.text()}`);
-  return res.json();
-}
-
-export function getAthlete(token: string, fetchFn: Fetch = fetch): Promise<any> {
-  return stravaGet("/athlete", token, fetchFn);
-}
-
-// All activities starting after `after` (epoch seconds; 0 = everything), oldest first.
+// Activities that started at or after `after` (epoch seconds; 0 = everything).
+// Garmin lists newest first and ignores date filters, so page until older ones appear.
 export async function fetchActivitiesSince(token: string, after: number, fetchFn: Fetch = fetch): Promise<any[]> {
   const all: any[] = [];
-  for (let page = 1; ; page++) {
-    const batch = await stravaGet(`/athlete/activities?after=${after}&per_page=200&page=${page}`, token, fetchFn);
-    all.push(...batch);
-    if (batch.length < 200) return all;
+  for (let start = 0; ; start += PAGE_SIZE) {
+    const url = `${GARMIN}/activitylist-service/activities/search/activities?start=${start}&limit=${PAGE_SIZE}`;
+    const res = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Garmin activity list failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    const page = await res.json() as any[];
+    for (const a of page) {
+      if (gmtToEpoch(a.startTimeGMT) >= after) all.push(a);
+    }
+    const oldest = page[page.length - 1];
+    if (page.length < PAGE_SIZE || (after > 0 && gmtToEpoch(oldest.startTimeGMT) < after)) return all;
   }
+}
+
+// "2026-10-24 08:31:18" (GMT) -> "2026-10-24T08:31:18Z", the format the Strava rows use.
+export function gmtToIso(gmt: string): string {
+  return gmt.replace(" ", "T").replace(/(\.\d+)?$/, "") + "Z";
+}
+
+function gmtToEpoch(gmt: string): number {
+  return Math.floor(Date.parse(gmtToIso(gmt)) / 1000);
 }
 
 export function afterFromNewest(newestStartDate: string | null): number {
   if (!newestStartDate) return 0;
   return Math.max(0, Math.floor(Date.parse(newestStartDate) / 1000) - OVERLAP_SECONDS);
+}
+
+// Garmin activity type keys -> Strava's type names, so the site and anything
+// reading the API see the same values as before. Unknown keys become PascalCase.
+const TYPE_MAP: Record<string, string> = {
+  running: "Run", street_running: "Run", track_running: "Run", treadmill_running: "Run",
+  indoor_running: "Run", ultra_run: "Run", trail_running: "TrailRun", virtual_run: "VirtualRun",
+  cycling: "Ride", road_biking: "Ride", indoor_cycling: "Ride", gravel_cycling: "GravelRide",
+  mountain_biking: "MountainBikeRide", virtual_ride: "VirtualRide", e_bike_fitness: "EBikeRide",
+  e_bike_mountain: "EBikeRide", lap_swimming: "Swim", open_water_swimming: "Swim",
+  walking: "Walk", hiking: "Hike", strength_training: "WeightTraining", yoga: "Yoga",
+  rowing: "Rowing", indoor_rowing: "Rowing",
+};
+
+export function stravaType(typeKey: string | undefined): string {
+  if (!typeKey) return "Workout";
+  return TYPE_MAP[typeKey] ?? typeKey.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+}
+
+// data_json keeps Strava's field names for what the detail view shows, plus the
+// whole Garmin record under `garmin`.
+export function detailsJson(a: any): string {
+  return JSON.stringify({
+    average_speed: a.averageSpeed,
+    max_speed: a.maxSpeed,
+    average_heartrate: a.averageHR,
+    max_heartrate: a.maxHR,
+    average_cadence: a.averageRunningCadenceInStepsPerMinute ?? a.averageBikingCadenceInRevPerMinute,
+    average_watts: a.avgPower,
+    max_watts: a.maxPower,
+    weighted_average_watts: a.normPower,
+    calories: a.calories,
+    elev_high: a.maxElevation,
+    elev_low: a.minElevation,
+    garmin: a,
+  });
 }
 
 export function activityUpserts(athleteId: number, activities: any[]): Statement[] {
@@ -143,20 +153,33 @@ export function activityUpserts(athleteId: number, activities: any[]): Statement
       sql: `INSERT INTO activities (${ACTIVITY_COLUMNS.join(", ")}) VALUES ${chunk.map(() => rowPlaceholder).join(", ")}
 ON CONFLICT(id) DO UPDATE SET ${updates}`,
       params: chunk.flatMap((a) => [
-        a.id, athleteId, a.name, a.type, a.start_date, a.distance,
-        a.moving_time, a.elapsed_time, a.total_elevation_gain, JSON.stringify(a),
+        a.activityId, athleteId, a.activityName ?? null, stravaType(a.activityType?.typeKey),
+        gmtToIso(a.startTimeGMT), a.distance ?? 0, Math.round(a.movingDuration ?? a.duration ?? 0),
+        Math.round(a.elapsedDuration ?? a.duration ?? 0), a.elevationGain ?? 0, detailsJson(a), "garmin",
       ]),
     });
   }
   return statements;
 }
 
-export function userUpsert(athlete: any, syncedAt: number): Statement {
+// Removes Strava-imported rows that Garmin now also has (same athlete, same start
+// within the window), so nothing shows twice. Strava-only rows (e.g. before the
+// Garmin history starts) stay.
+export function dedupeStrava(athleteId: number): Statement {
   return {
-    sql: `INSERT INTO users (strava_id, firstname, lastname, profile_pic, last_synced_at) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(strava_id) DO UPDATE SET firstname = excluded.firstname, lastname = excluded.lastname,
-profile_pic = excluded.profile_pic, last_synced_at = excluded.last_synced_at`,
-    params: [athlete.id, athlete.firstname, athlete.lastname, athlete.profile, syncedAt],
+    sql: `DELETE FROM activities WHERE source = 'strava' AND strava_id = ? AND EXISTS (
+  SELECT 1 FROM activities g WHERE g.source = 'garmin' AND g.strava_id = activities.strava_id
+  AND abs(unixepoch(g.start_date) - unixepoch(activities.start_date)) <= ?)`,
+    params: [athleteId, DUPLICATE_WINDOW_SECONDS],
+  };
+}
+
+// Keeps the athlete row (names come from the Strava era) and records the sync time.
+export function userTouch(athleteId: number, syncedAt: number): Statement {
+  return {
+    sql: `INSERT INTO users (strava_id, last_synced_at) VALUES (?, ?)
+ON CONFLICT(strava_id) DO UPDATE SET last_synced_at = excluded.last_synced_at`,
+    params: [athleteId, syncedAt],
   };
 }
 
@@ -192,42 +215,36 @@ export async function purgeCache(config: Config, fetchFn: Fetch = fetch): Promis
 export interface SyncResult {
   after: number;
   fetched: number;
-  state: TokenState;
+  written: number;
 }
 
-// One full run: refresh the token, fetch new activities, write them to D1,
-// update the user row and purge the cached API responses.
+// One full run: get a token, fetch new activities, write them to D1, drop
+// Strava duplicates, record the sync time and purge the cached API responses.
 export async function runSync(
-  config: Config,
-  state: TokenState,
-  opts: { full?: boolean; now?: number; onTokens?: (s: TokenState) => void } = {},
-  fetchFn: Fetch = fetch
+  config: Config, opts: { full?: boolean; now?: number } = {}, fetchFn: Fetch = fetch
 ): Promise<SyncResult> {
   const now = opts.now ?? Math.floor(Date.now() / 1000);
-  const newState = await ensureAccessToken(config, state, now, fetchFn);
-  // Persist straight away, so a later failure can't lose a rotated refresh token.
-  if (newState !== state) opts.onTokens?.(newState);
-  const token = newState.access_token!;
+  const token = await getAccessToken(config, fetchFn);
 
   let after = 0;
   if (!opts.full) {
     const rows = await d1Query(config, {
-      sql: "SELECT max(start_date) AS newest FROM activities WHERE strava_id = ?",
+      sql: "SELECT max(start_date) AS newest FROM activities WHERE strava_id = ? AND source = 'garmin'",
       params: [config.athlete_id],
     }, fetchFn);
     after = afterFromNewest(rows[0]?.newest ?? null);
   }
 
-  const athlete = await getAthlete(token, fetchFn);
-  if (athlete.id !== config.athlete_id) {
-    throw new Error(`token belongs to athlete ${athlete.id}, not the configured ${config.athlete_id}`);
-  }
-  const activities = await fetchActivitiesSince(token, after, fetchFn);
+  const fetched = await fetchActivitiesSince(token, after, fetchFn);
+  const keep = config.include_types
+    ? fetched.filter((a) => config.include_types!.includes(stravaType(a.activityType?.typeKey)))
+    : fetched;
 
   // User row first: activities reference it, and D1 enforces foreign keys.
-  await d1Query(config, userUpsert(athlete, now), fetchFn);
-  for (const stmt of activityUpserts(config.athlete_id, activities)) await d1Query(config, stmt, fetchFn);
+  await d1Query(config, userTouch(config.athlete_id, now), fetchFn);
+  for (const stmt of activityUpserts(config.athlete_id, keep)) await d1Query(config, stmt, fetchFn);
+  await d1Query(config, dedupeStrava(config.athlete_id), fetchFn);
   await purgeCache(config, fetchFn);
 
-  return { after, fetched: activities.length, state: newState };
+  return { after, fetched: fetched.length, written: keep.length };
 }
