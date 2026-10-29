@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activitiesFromCsv, exportDateToIso, parseCsv, toSql } from "../scripts/import-strava-export";
+import { activitiesFromCsv, exportDateToIso, parseCsv, toSql, workoutTypeFromTag } from "../scripts/import-strava-export";
 import { setupTestDb } from "./setup-test-db";
 
 // Shape of a real export: repeated "Elapsed Time" and "Distance" headers (km first, metres last),
@@ -20,6 +20,21 @@ describe("import-strava-export", () => {
     expect(exportDateToIso("Oct 16, 2025, 6:01:50 AM")).toBe("2025-10-16T06:01:50Z");
     expect(exportDateToIso("Feb 1, 2015, 12:05:00 PM")).toBe("2015-02-01T12:05:00Z");
     expect(exportDateToIso("Feb 1, 2015, 12:05:00 AM")).toBe("2015-02-01T00:05:00Z");
+  });
+
+  it("derives workout_type from the Tag column", () => {
+    expect(workoutTypeFromTag("running|race")).toBe(1);
+    expect(workoutTypeFromTag("offroad|running|race")).toBe(1);
+    expect(workoutTypeFromTag("long_run|running")).toBe(2);
+    expect(workoutTypeFromTag("running")).toBe(0);
+    expect(workoutTypeFromTag("riding|race")).toBe(11);
+    expect(workoutTypeFromTag("riding")).toBe(10);
+    expect(workoutTypeFromTag("")).toBeNull();
+    expect(workoutTypeFromTag(undefined)).toBeNull();
+    const csv = 'Activity ID,Activity Date,Activity Name,Activity Type,Tag\n1,"Sep 13, 2026, 8:01:00 AM",Tor Des Geants,Run,offroad|running|race\n2,"Sep 3, 2022, 9:00:00 AM",Dock2Dock,Swim,';
+    const [race, swim] = activitiesFromCsv(csv);
+    expect(race.data_json.workout_type).toBe(1);
+    expect(swim.data_json).not.toHaveProperty("workout_type");
   });
 
   it("maps columns, taking metres from the later Distance column", () => {

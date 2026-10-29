@@ -8,7 +8,8 @@
 // Like the old API sync it takes every activity, keyed on the Strava activity id.
 // data_json uses the API's field names. For rows already in D1 the export values
 // are merged over the stored API record (json_patch), so API-only fields such as
-// workout_type (the race tag) and map survive.
+// workout_type (the race tag) and map survive. workout_type also comes from the
+// export's Tag column, so new activities get the race tag too.
 
 import { readFileSync } from "node:fs";
 
@@ -54,6 +55,20 @@ export function exportDateToIso(s: string): string {
 // twice). The later column is the precise one, so the last match wins.
 function columnIndex(header: string[]): (name: string) => number {
   return (name) => header.lastIndexOf(name);
+}
+
+// The export has no workout_type, but its Tag column carries the same choice
+// ("running|race", "offroad|running|race", "long_run|running", "riding|race").
+// Mapped to the API's codes: runs 0 default, 1 race, 2 long run, 3 workout;
+// rides 10 default, 11 race, 12 workout. Untagged (e.g. swims) -> null.
+export function workoutTypeFromTag(tag: string | undefined): number | null {
+  const t = new Set((tag ?? "").split("|").map((s) => s.trim()).filter(Boolean));
+  const base = t.has("running") ? 0 : t.has("riding") ? 10 : null;
+  if (base === null) return null;
+  if (t.has("race")) return base + 1;
+  if (base === 0 && t.has("long_run")) return 2;
+  if (t.has("workout")) return base === 0 ? 3 : 12;
+  return base;
 }
 
 function num(v: string | undefined): number | null {
@@ -102,6 +117,7 @@ export function activitiesFromCsv(text: string): ExportActivity[] {
       weighted_average_watts: num(get(row, "Weighted Average Power")),
       calories: num(get(row, "Calories")),
       average_temp: num(get(row, "Average Temperature")),
+      workout_type: workoutTypeFromTag(get(row, "Tag")),
       gear: get(row, "Activity Gear") || null,
       export_filename: get(row, "Filename") || null,
     };
