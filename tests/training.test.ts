@@ -82,4 +82,18 @@ describe("training API", () => {
     expect(none.body).toEqual([]);
     expect((await get("/api/training/summary?from=2026")).status).toBe(400);
   });
+
+  it("accepts a comma-separated sport list on activities and summary", async () => {
+    const get = (path: string) => handleRequest(new Request(`http://localhost${path}`), env, ctx);
+    const acts = await (await get("/api/training/activities?sport=run,ride")).json() as any[];
+    expect(acts).toHaveLength(3);
+    const runs = await (await get("/api/training/activities?sport=run")).json() as any[];
+    expect(runs.map((a) => a.sport)).toEqual(["run", "run"]);
+    const page = await get("/api/training/activities?sport=ride,swim&limit=10");
+    expect(page.headers.get("X-Total-Count")).toBe("1");
+    const summary = await (await get("/api/training/summary?period=year&sport=run,ride")).json() as any[];
+    expect(new Set(summary.map((r) => r.sport))).toEqual(new Set(["run", "ride"]));
+    expect((await get("/api/training/activities?sport=run;drop")).status).toBe(400);
+    expect((await get("/api/training/summary?sport=,")).status).toBe(400);
+  });
 });
