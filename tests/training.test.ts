@@ -57,4 +57,29 @@ describe("training API", () => {
 
     expect((await get("/api/training/summary?period=day")).status).toBe(400);
   });
+
+  it("pages activities with a total count, newest first", async () => {
+    const first = await get("/api/training/activities?limit=2");
+    expect(first.body.map((a: any) => a.date)).toEqual(["2026-10-05", "2026-10-01"]);
+    expect(first.res.headers.get("X-Total-Count")).toBe("3");
+    expect(first.res.headers.get("Access-Control-Expose-Headers")).toContain("X-Total-Count");
+
+    const second = await get("/api/training/activities?limit=2&offset=2");
+    expect(second.body.map((a: any) => a.date)).toEqual(["2026-09-28"]);
+
+    const filtered = await get("/api/training/activities?limit=10&sport=run");
+    expect(filtered.res.headers.get("X-Total-Count")).toBe("2");
+
+    expect((await get("/api/training/activities?limit=0")).status).toBe(400);
+    expect((await get("/api/training/activities?limit=500")).status).toBe(400);
+    expect((await get("/api/training/activities?limit=5&offset=-1")).status).toBe(400);
+  });
+
+  it("limits the summary to a date range of weeks", async () => {
+    const year = await get("/api/training/summary?period=week&from=2026-01-01&to=2026-12-31&sport=ride");
+    expect(year.body.map((r: any) => r.period)).toEqual(["2026-10-05", "2026-09-28"]);
+    const none = await get("/api/training/summary?period=month&from=2027-01-01");
+    expect(none.body).toEqual([]);
+    expect((await get("/api/training/summary?from=2026")).status).toBe(400);
+  });
 });
