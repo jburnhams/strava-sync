@@ -1,22 +1,14 @@
+DROP TABLE IF EXISTS photos;
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS app_config;
 
-CREATE TABLE app_config (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  client_id TEXT NOT NULL,
-  client_secret TEXT NOT NULL,
-  created_at INTEGER DEFAULT (unixepoch())
-);
-
+-- Read-only from the Worker. Data is loaded from a Strava export (races only).
+-- No credentials live here.
 CREATE TABLE users (
   strava_id INTEGER PRIMARY KEY,
   firstname TEXT,
   lastname TEXT,
   profile_pic TEXT,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
   created_at INTEGER DEFAULT (unixepoch()),
   last_synced_at INTEGER
 );
@@ -33,4 +25,20 @@ CREATE TABLE activities (
   total_elevation_gain REAL,
   data_json TEXT, -- Full JSON dump for caching
   FOREIGN KEY (strava_id) REFERENCES users(strava_id)
+);
+
+-- Activity photos from the Strava export, resized and with all metadata (incl.
+-- GPS) stripped; base64 JPEG. Served by GET /api/photos/:id; activities list them
+-- in data_json.photos.
+CREATE TABLE photos (
+  id TEXT PRIMARY KEY, -- "<activity id>_<position>"
+  activity_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  caption TEXT,
+  width INTEGER NOT NULL, -- of the full size
+  height INTEGER NOT NULL,
+  thumb TEXT NOT NULL, -- ~400 px wide
+  full TEXT NOT NULL, -- ~1200 px on the long edge
+  source TEXT, -- file name in the export, to skip it on the next import
+  FOREIGN KEY (activity_id) REFERENCES activities(id)
 );

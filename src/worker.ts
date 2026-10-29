@@ -1,15 +1,13 @@
 import type { ErrorResponse } from "./types";
-import { handleConfig, handleLogin, handleCallback } from "./auth";
-import { handleGetUsers, handleGetUser, handleSync, handleGetActivities } from "./sync";
+import { handleGetUsers, handleGetUser, handleGetActivities } from "./sync";
 import { handleOptions, wrapCors } from "./cors";
+import { handleGetPhoto } from "./photos";
 
 export interface Env {
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
   DB: D1Database;
-  CLOUDFLARE_ZONE_ID: string;
-  CLOUDFLARE_API_TOKEN: string;
 }
 
 export interface ExecutionContext {
@@ -37,26 +35,26 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
     return handleOptions(request);
   }
 
-  // Auth
-  if (path === "/api/config") return handleConfig(request, env);
-  if (path === "/api/auth/login") return handleLogin(request, env);
-  if (path === "/api/auth/callback") return handleCallback(request, env);
+  // Read-only API: data is loaded into D1 directly, never through the Worker
+  if (method !== "GET" && method !== "HEAD") {
+    return createErrorResponse("METHOD_NOT_ALLOWED", "This API is read-only", 405);
+  }
 
   // Users
-  if (path === "/api/users" && method === "GET") return handleGetUsers(request, env);
+  if (path === "/api/users") return handleGetUsers(request, env);
 
   // User Details & Sync (Regex might be cleaner but manual parsing is fine for now)
   // /api/users/:id
   const userMatch = path.match(/^\/api\/users\/(\d+)$/);
-  if (userMatch && method === "GET") return handleGetUser(request, env);
-
-  // /api/users/:id/sync
-  const syncMatch = path.match(/^\/api\/users\/(\d+)\/sync$/);
-  if (syncMatch && method === "POST") return handleSync(request, env, ctx);
+  if (userMatch) return handleGetUser(request, env);
 
   // /api/users/:id/activities
   const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
-  if (actMatch && method === "GET") return handleGetActivities(request, env);
+  if (actMatch) return handleGetActivities(request, env);
+
+  // /api/photos/:id
+  const photoMatch = path.match(/^\/api\/photos\/(\d+_\d+)$/);
+  if (photoMatch) return handleGetPhoto(request, env, photoMatch[1]);
 
   if (path === "/api/health") {
     return new Response(JSON.stringify({ status: "ok" }), {

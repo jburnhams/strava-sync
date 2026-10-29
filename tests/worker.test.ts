@@ -43,4 +43,36 @@ describe("Worker API", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("<html>Index</html>");
   });
+
+  it("should reject writes: the API is read-only", async () => {
+    for (const path of ["/api/config", "/api/users/1/sync", "/api/users"]) {
+      const res = await handleRequest(new Request(`http://localhost${path}`, { method: "POST" }), env, { waitUntil: () => {} });
+      expect(res.status).toBe(405);
+    }
+  });
+
+  it("should 404 the removed OAuth endpoints", async () => {
+    const res = await handleRequest(new Request("http://localhost/api/auth/login"), env, { waitUntil: () => {} });
+    expect(res.status).toBe(404);
+  });
+
+  it("serves photos as cached JPEGs and 404s unknown ones", async () => {
+    await env.DB.prepare("INSERT INTO users (strava_id) VALUES (1)").run();
+    await env.DB.prepare("INSERT INTO activities (id, strava_id) VALUES (5, 1)").run();
+    await env.DB.prepare(`INSERT INTO photos (id, activity_id, position, width, height, thumb, full)
+      VALUES ('5_0', 5, 0, 2, 1, ?, ?)`).bind(btoa("thumb-bytes"), btoa("full-bytes")).run();
+
+    const full = await handleRequest(new Request("http://localhost/api/photos/5_0"), env, { waitUntil: () => {} });
+    expect(full.status).toBe(200);
+    expect(full.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(full.headers.get("Cache-Control")).toContain("immutable");
+    expect(full.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(await full.text()).toBe("full-bytes");
+
+    const thumb = await handleRequest(new Request("http://localhost/api/photos/5_0?size=thumb"), env, { waitUntil: () => {} });
+    expect(await thumb.text()).toBe("thumb-bytes");
+
+    const missing = await handleRequest(new Request("http://localhost/api/photos/5_9"), env, { waitUntil: () => {} });
+    expect(missing.status).toBe(404);
+  });
 });

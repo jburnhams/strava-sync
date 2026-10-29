@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface User {
   strava_id: number;
@@ -13,7 +13,6 @@ export default function Dashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetch("/api/users")
@@ -31,22 +30,6 @@ export default function Dashboard() {
       });
   }, []);
 
-  const handleConnect = async () => {
-    // Check if configured first
-    try {
-       // We can just try to login, if 500 then config needed
-       const res = await fetch("/api/auth/login", { redirect: "manual" });
-       if (res.type === "opaqueredirect" || res.status === 302 || res.status === 200) { // 302 manual redirect
-          window.location.href = "/api/auth/login";
-       } else if (res.status === 500) {
-          // Likely not configured
-          navigate("/setup");
-       }
-    } catch {
-       navigate("/setup");
-    }
-  };
-
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -55,7 +38,7 @@ export default function Dashboard() {
 
       <div className="user-list">
         {users.length === 0 ? (
-          <p>No users connected yet.</p>
+          <p>No athletes synced yet.</p>
         ) : (
           users.map((user) => (
             <Link key={user.strava_id} to={`/user/${user.strava_id}`} className="user-card">
@@ -69,7 +52,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      <button onClick={handleConnect} className="btn-primary">Connect New Strava User</button>
     </div>
   );
 }

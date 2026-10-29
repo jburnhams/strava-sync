@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import ActivityChart from "./ActivityChart";
 import ActivityScatterPlot from "./ActivityScatterPlot.tsx";
@@ -9,10 +9,7 @@ export default function UserDetail() {
   const { id } = useParams();
   const [user, setUser] = useState<any>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [progress, setProgress] = useState("");
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
-  const abortController = useRef<AbortController | null>(null);
 
   const fetchUser = async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -29,55 +26,6 @@ export default function UserDetail() {
     fetchActivities();
   }, [id]);
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setProgress("Starting sync...");
-    abortController.current = new AbortController();
-
-    let page = 1;
-    let complete = false;
-    let totalSynced = 0;
-
-    try {
-      while (!complete) {
-        if (abortController.current.signal.aborted) break;
-
-        setProgress(`Syncing page ${page}... (Total: ${totalSynced})`);
-
-        const res = await fetch(`/api/users/${id}/sync?page=${page}`, {
-          method: "POST",
-          signal: abortController.current.signal
-        });
-
-        if (!res.ok) {
-           setProgress(`Error: ${res.statusText}`);
-           break;
-        }
-
-        const data = await res.json();
-        totalSynced += data.synced;
-
-        if (data.complete) {
-          complete = true;
-        } else {
-          page = data.next_page;
-        }
-      }
-
-      if (complete) {
-        setProgress(`Sync Complete! Fetched ${totalSynced} activities.`);
-        fetchUser(); // Refresh last synced time
-        fetchActivities(); // Refresh list
-      }
-    } catch (e: any) {
-       if (e.name !== "AbortError") {
-         setProgress("Sync failed.");
-       }
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   if (!user) return <div>Loading...</div>;
 
   return (
@@ -89,13 +37,9 @@ export default function UserDetail() {
         <div>
            <h1>{user.firstname} {user.lastname}</h1>
            <p>ID: {user.strava_id}</p>
+           <p>Last synced: {user.last_synced_at ? new Date(user.last_synced_at * 1000).toLocaleString() : "Never"}</p>
         </div>
-        <button onClick={handleSync} disabled={syncing} className="btn-primary">
-          {syncing ? "Syncing..." : "Sync Now"}
-        </button>
       </div>
-
-      {progress && <div className="sync-status">{progress}</div>}
 
       <ActivityChart activities={activities} />
       <ActivityScatterPlot activities={activities} onActivityClick={setSelectedActivity} />

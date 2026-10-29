@@ -2,8 +2,8 @@
 export function getCorsHeaders(request: Request): HeadersInit {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -23,7 +23,7 @@ export function handleOptions(request: Request): Response {
     return new Response(null, {
       status: 204,
       headers: {
-        "Allow": "GET, HEAD, POST, OPTIONS",
+        "Allow": "GET, HEAD, OPTIONS",
       },
     });
   }
