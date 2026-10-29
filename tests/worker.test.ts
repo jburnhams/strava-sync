@@ -43,4 +43,16 @@ describe("Worker API", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("<html>Index</html>");
   });
+
+  it("should reject writes: the API is read-only", async () => {
+    for (const path of ["/api/config", "/api/users/1/sync", "/api/users"]) {
+      const res = await handleRequest(new Request(`http://localhost${path}`, { method: "POST" }), env, { waitUntil: () => {} });
+      expect(res.status).toBe(405);
+    }
+  });
+
+  it("should 404 the removed OAuth endpoints", async () => {
+    const res = await handleRequest(new Request("http://localhost/api/auth/login"), env, { waitUntil: () => {} });
+    expect(res.status).toBe(404);
+  });
 });

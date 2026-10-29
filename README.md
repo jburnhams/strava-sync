@@ -1,18 +1,15 @@
 # Strava Sync
 
-A full-stack Cloudflare Workers application that acts as a caching layer for public Strava data. It allows multiple users to connect their Strava accounts, fetches their profile and activities, and stores them in a Cloudflare D1 database for efficient access.
+A Cloudflare Worker that serves cached Strava data from a D1 database through a read-only, CORS-enabled API and a small React dashboard. The data is written by a local sync job ([sync/](sync/README.md)) that holds the Strava credentials and runs on a timer, so no Strava secrets live in Cloudflare.
 
 ## Features
 
--   **Multi-User Support**: Connects multiple Strava accounts using OAuth 2.0.
--   **Data Sync**: Fetches and caches athlete profiles and activities (paginated).
+-   **Sync job** (`sync/`): runs locally (bun), refreshes the Strava token, fetches new activities and writes them to D1 over the D1 HTTP API, then purges the Cloudflare cache.
 -   **Frontend**: A React Single Page Application (SPA) embedded directly in the Worker.
-    -   **Setup**: Configure Strava API credentials (Client ID/Secret).
-    -   **Dashboard**: View connected users.
-    -   **User Detail**: View profile, sync status, and list of activities. Trigger manual syncs.
+    -   **Dashboard**: View synced athletes.
+    -   **User Detail**: View profile, last sync time, charts and activities.
 -   **Backend**: Cloudflare Worker with D1 Database (SQLite).
-    -   **Auth**: Handles OAuth code exchange and token management.
-    -   **API**: REST endpoints for fetching users, activities, and triggering syncs.
+    -   **API**: read-only `GET /api/users`, `/api/users/:id`, `/api/users/:id/activities`; any other method gets 405.
 
 ## Architecture
 
@@ -25,9 +22,10 @@ A full-stack Cloudflare Workers application that acts as a caching layer for pub
 
 -   `src/`: Backend Worker code.
     -   `worker.ts`: Main entry point and router.
-    -   `auth.ts`: OAuth handlers (`/api/auth/*`).
-    -   `sync.ts`: Sync logic and data retrieval endpoints (`/api/users/*`).
+    -   `sync.ts`: data retrieval endpoints (`/api/users/*`).
     -   `db.ts`: D1 database access layer.
+-   `sync/`: local sync job, its systemd units and [setup](sync/README.md).
+-   `migrations/`: one-off changes to the live D1 database.
 -   `frontend/`: React application.
     -   `src/`: React components and logic.
     -   `vite.config.ts`: Frontend build configuration.
@@ -72,4 +70,4 @@ A full-stack Cloudflare Workers application that acts as a caching layer for pub
 ## Implementation Details
 
 -   **Asset Serving**: The frontend is built into `frontend/dist`. The Worker serves these static assets using Cloudflare's native `[assets]` binding. API requests (`/api/*`) are intercepted and handled by the Worker logic. SPA routing is supported by falling back to `index.html` for unknown routes.
--   **Security**: Strava Access and Refresh tokens are stored in D1 but never exposed to the frontend API.
+-   **Security**: The Worker holds no credentials and accepts no writes. The Strava client secret, refresh token and the Cloudflare API token used for writes stay on the machine running the sync job.

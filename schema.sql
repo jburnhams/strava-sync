@@ -1,22 +1,13 @@
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS app_config;
 
-CREATE TABLE app_config (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  client_id TEXT NOT NULL,
-  client_secret TEXT NOT NULL,
-  created_at INTEGER DEFAULT (unixepoch())
-);
-
+-- Written only by the local sync job (sync/strava-sync.ts) through the D1 HTTP
+-- API. No Strava credentials live here: they stay on the machine running it.
 CREATE TABLE users (
   strava_id INTEGER PRIMARY KEY,
   firstname TEXT,
   lastname TEXT,
   profile_pic TEXT,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
   created_at INTEGER DEFAULT (unixepoch()),
   last_synced_at INTEGER
 );
