@@ -1,7 +1,7 @@
 import type { ErrorResponse } from "./types";
 import { handleGetUsers, handleGetUser, handleGetActivities } from "./sync";
 import { handleOptions, wrapCors } from "./cors";
-import { handleGetPhoto } from "./photos";
+import { handleGetPhoto, handleRandomPhotos } from "./photos";
 import { handleTrainingActivities, handleTrainingSummary } from "./training";
 
 export interface Env {
@@ -52,6 +52,9 @@ async function handleApiRequest(request: Request, env: Env, ctx: ExecutionContex
   // /api/users/:id/activities
   const actMatch = path.match(/^\/api\/users\/(\d+)\/activities$/);
   if (actMatch) return handleGetActivities(request, env);
+
+  // /api/photos/random?seed=&offset=&limit= (a seeded shuffle, for slideshows)
+  if (path === "/api/photos/random") return handleRandomPhotos(request, env);
 
   // /api/photos/:id
   const photoMatch = path.match(/^\/api\/photos\/(\d+_\d+)$/);
