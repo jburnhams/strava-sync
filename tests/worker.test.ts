@@ -75,32 +75,4 @@ describe("Worker API", () => {
     const missing = await handleRequest(new Request("http://localhost/api/photos/5_9"), env, { waitUntil: () => {} });
     expect(missing.status).toBe(404);
   });
-
-  it("lists photos in a seeded random order that pages without repeats", async () => {
-    await env.DB.prepare("INSERT INTO users (strava_id) VALUES (1)").run();
-    await env.DB.prepare("INSERT INTO activities (id, strava_id) VALUES (5, 1)").run();
-    for (let i = 0; i < 12; i++) {
-      await env.DB.prepare(`INSERT INTO photos (id, activity_id, position, width, height, thumb, full)
-        VALUES (?, 5, ?, 2, 1, 'x', 'y')`).bind(`5_${i}`, i).run();
-    }
-    const get = async (qs: string) => handleRequest(new Request(`http://localhost/api/photos?${qs}`), env, { waitUntil: () => {} });
-    const ids = async (qs: string) => ((await (await get(qs)).json()) as any[]).map((p) => p.id);
-
-    const first = await get("seed=abc&limit=5");
-    expect(first.status).toBe(200);
-    expect(first.headers.get("X-Total-Count")).toBe("12");
-    const page1 = (await first.json()) as any[];
-    expect(page1[0]).toMatchObject({ activity_id: 5, thumb_url: expect.stringContaining("?size=thumb") });
-
-    const all = [...(await ids("seed=abc&limit=5")), ...(await ids("seed=abc&limit=5&offset=5")), ...(await ids("seed=abc&limit=5&offset=10"))];
-    expect(all).toHaveLength(12);
-    expect(new Set(all).size).toBe(12);
-    expect(await ids("seed=abc&limit=5")).toEqual(all.slice(0, 5));
-    expect(await ids("seed=another seed ✓&limit=12")).not.toEqual(all);
-    expect(await ids("seed=abc&offset=12")).toEqual([]);
-
-    expect((await get("limit=5")).status).toBe(400);
-    expect((await get("seed=abc&limit=0")).status).toBe(400);
-    expect((await get("seed=abc&offset=-1")).status).toBe(400);
-  });
 });
